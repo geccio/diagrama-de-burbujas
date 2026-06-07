@@ -16,6 +16,7 @@ import {
   normalizeCategory,
 } from "@/lib/aiTasks";
 import { IconX, IconWarning } from "@/components/icons";
+import OllamaSetupHelp from "@/components/OllamaSetupHelp";
 
 interface Props {
   onClose: () => void;
@@ -302,7 +303,7 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
         {/* Status */}
         {status.kind !== "idle" && (
           <div
-            className={`flex items-start gap-2 rounded-lg p-3 text-sm ${
+            className={`mb-3 flex items-start gap-2 rounded-lg p-3 text-sm ${
               status.kind === "error"
                 ? "bg-[rgba(220,38,38,0.15)] text-red-300"
                 : status.kind === "ok"
@@ -317,12 +318,11 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
           </div>
         )}
 
+        {/* Setup instructions — opens automatically on a connection error. */}
+        <OllamaSetupHelp defaultOpen={status.kind === "error"} key={status.kind} />
+
         <p className="mt-3 text-[11px] leading-tight text-[var(--color-muted-fg)]">
-          Tip: start Ollama allowing this site, e.g.{" "}
-          <code className="font-mono-accent">
-            OLLAMA_ORIGINS=&quot;*&quot; ollama serve
-          </code>
-          . Smart import mapping is available in the Upload dialog.
+          Smart import mapping is available in the Upload dialog.
         </p>
       </div>
     </div>

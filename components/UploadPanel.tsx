@@ -8,7 +8,11 @@ import { parseNumber, columnLooksNumeric } from "@/lib/parseNumber";
 import { partitionRows } from "@/lib/rowClassify";
 import { useDiagram } from "@/store/useDiagram";
 import { loadOllamaSettings, describeOllamaError } from "@/lib/ollama";
-import { aiMapColumns, normalizeCategory } from "@/lib/aiTasks";
+import {
+  aiMapColumns,
+  aiBuildDiagram,
+  normalizeCategory,
+} from "@/lib/aiTasks";
 import {
   IconX,
   IconSpreadsheet,
@@ -39,6 +43,8 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
   const [fileName, setFileName] = useState<string>("");
 
   const addSpaces = useDiagram((s) => s.addSpaces);
+  const addLinksByNames = useDiagram((s) => s.addLinksByNames);
+  const [aiBuilding, setAiBuilding] = useState(false);
 
   async function handleFile(file: File) {
     setError(null);
@@ -137,6 +143,43 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
     }
   }
 
+  // Let the AI read the whole table and build the diagram (spaces + links).
+  async function handleAiBuild() {
+    if (!table) return;
+    setAiBuilding(true);
+    setAiMsg(null);
+    try {
+      const { spaces, adjacencies } = await aiBuildDiagram(
+        loadOllamaSettings(),
+        table.headers,
+        table.rows
+      );
+      if (spaces.length === 0) {
+        setAiMsg("The AI didn't find any spaces in this file.");
+        return;
+      }
+      addSpaces(
+        spaces.map((s) => ({
+          name: s.name,
+          area: typeof s.area === "number" ? s.area : undefined,
+          category: normalizeCategory(s.category),
+          floor: s.floor,
+        })),
+        "replace",
+        canvasSize
+      );
+      // Links reference space names — apply after bubbles exist.
+      if (adjacencies.length > 0) {
+        setTimeout(() => addLinksByNames(adjacencies), 0);
+      }
+      onClose();
+    } catch (e) {
+      setAiMsg(describeOllamaError(e));
+    } finally {
+      setAiBuilding(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
@@ -230,16 +273,25 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
               <span className="text-[var(--color-fg)]">{fileName}</span>.
             </p>
 
-            {/* AI auto-map */}
-            <div className="mb-3 flex items-center gap-2">
+            {/* AI actions: build whole diagram, or just map columns */}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button
+                onClick={handleAiBuild}
+                disabled={aiBuilding || aiMapping}
+                title="Let the AI read the whole file and build the diagram (spaces + connections)"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-primary)] transition-colors duration-150 hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+              >
+                <IconSparkles size={16} />
+                {aiBuilding ? "Building…" : "AI: build diagram from this file"}
+              </button>
               <button
                 onClick={handleAiMap}
-                disabled={aiMapping}
+                disabled={aiMapping || aiBuilding}
                 title="Use Ollama to map columns to name / area / category / floor"
                 className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)] disabled:opacity-50"
               >
                 <IconSparkles size={16} />
-                {aiMapping ? "Mapping…" : "AI auto-map columns"}
+                {aiMapping ? "Mapping…" : "AI map columns"}
               </button>
               {aiMsg && (
                 <span className="text-xs text-[var(--color-muted-fg)]">

@@ -1,0 +1,13 @@
+Room,Area,Floor
+Living Room,32,Ground
+Kitchen,18,Ground
+Dining,16,Ground
+Garage,30,Ground
+Master Bedroom,24,First
+Bedroom 2,14,First
+Bedroom 3,12,First
+Bathroom,8,First
+Office,11,First
+Hallway,9,First
+Storage,6,Ground
+Laundry,7,Ground

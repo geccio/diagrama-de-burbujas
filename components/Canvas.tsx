@@ -245,12 +245,14 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
           const b = bubbleById.get(link.toBubbleId);
           if (!a || !b) return null;
           const selected = link.id === selectedLinkId;
+          const dashed = link.kind === "dashed";
           return (
             <Line
               key={link.id}
               points={[a.x, a.y, b.x, b.y]}
               stroke={selected ? "#ef4444" : colors.link}
               strokeWidth={selected ? 4 : 2.5}
+              dash={dashed ? [9, 7] : undefined}
               hitStrokeWidth={14}
               onClick={(e) => {
                 e.cancelBubble = true;

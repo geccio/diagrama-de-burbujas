@@ -20,6 +20,8 @@ export default function Legend() {
     return CATEGORY_ORDER.filter((id) => set.has(id));
   }, [layer.bubbles]);
 
+  const hasLinks = layer.links.length > 0;
+
   if (layer.bubbles.length === 0) return null;
 
   if (collapsed) {
@@ -61,6 +63,43 @@ export default function Legend() {
           </li>
         ))}
       </ul>
+
+      {hasLinks && (
+        <div className="mt-3 border-t border-[var(--color-border)] pt-2">
+          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-fg)]">
+            Connections
+          </span>
+          <ul className="space-y-1.5">
+            <li className="flex items-center gap-2 text-xs">
+              <svg width="26" height="8" className="shrink-0" aria-hidden="true">
+                <line
+                  x1="0"
+                  y1="4"
+                  x2="26"
+                  y2="4"
+                  className="stroke-[var(--color-muted-fg)]"
+                  strokeWidth="2.5"
+                />
+              </svg>
+              <span className="text-[var(--color-fg)]">Sure / direct</span>
+            </li>
+            <li className="flex items-center gap-2 text-xs">
+              <svg width="26" height="8" className="shrink-0" aria-hidden="true">
+                <line
+                  x1="0"
+                  y1="4"
+                  x2="26"
+                  y2="4"
+                  className="stroke-[var(--color-muted-fg)]"
+                  strokeWidth="2.5"
+                  strokeDasharray="5 4"
+                />
+              </svg>
+              <span className="text-[var(--color-fg)]">Intermittent / not sure</span>
+            </li>
+          </ul>
+        </div>
+      )}
 
       <div className="mt-3 border-t border-[var(--color-border)] pt-2">
         <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-fg)]">

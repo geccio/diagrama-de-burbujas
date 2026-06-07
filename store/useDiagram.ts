@@ -76,6 +76,7 @@ interface DiagramState extends UIState {
 
   // connect mode
   handleBubbleConnectClick: (id: string) => void;
+  setLinkKind: (id: string, kind: import("@/lib/types").LinkKind) => void;
   deleteLink: (id: string) => void;
 
   // drawings
@@ -370,6 +371,21 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     } else {
       set({ pendingConnectId: null });
     }
+  },
+
+  setLinkKind: (id, kind) => {
+    const { diagram } = get();
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            links: l.links.map((k) => (k.id === id ? { ...k, kind } : k)),
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    persist(next, set);
   },
 
   deleteLink: (id) => {

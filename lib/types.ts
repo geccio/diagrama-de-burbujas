@@ -17,10 +17,15 @@ export interface Bubble {
   category?: CategoryId;
 }
 
+/** Relationship strength a connection represents. */
+export type LinkKind = "solid" | "dashed";
+
 export interface Link {
   id: string;
   fromBubbleId: string;
   toBubbleId: string;
+  /** "solid" = sure/direct, "dashed" = intermittent/uncertain. Default solid. */
+  kind?: LinkKind;
 }
 
 export interface Drawing {

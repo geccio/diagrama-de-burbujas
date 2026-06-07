@@ -31,18 +31,64 @@ export default function PropertyPanel() {
   const selectedLinkId = useDiagram((s) => s.selectedLinkId);
   const updateBubble = useDiagram((s) => s.updateBubble);
   const setBubbleCategory = useDiagram((s) => s.setBubbleCategory);
+  const setLinkKind = useDiagram((s) => s.setLinkKind);
   const deleteBubble = useDiagram((s) => s.deleteBubble);
   const deleteLink = useDiagram((s) => s.deleteLink);
 
   const bubble = layer.bubbles.find((b) => b.id === selectedBubbleId);
+  const link = layer.links.find((k) => k.id === selectedLinkId);
 
-  if (selectedLinkId) {
+  if (selectedLinkId && link) {
+    const kind = link.kind ?? "solid";
     return (
       <div className={cardClass}>
-        <h3 className="mb-2 text-sm font-semibold">Connection selected</h3>
-        <p className="mb-3 text-xs text-[var(--color-muted-fg)]">
-          Remove this link to disconnect the two bubbles.
+        <h3 className="mb-3 text-sm font-semibold">Connection</h3>
+
+        <span className="mb-1.5 block text-xs text-[var(--color-muted-fg)]">
+          Relationship type
+        </span>
+        <div className="mb-4 flex overflow-hidden rounded-lg border border-[var(--color-border)]">
+          <button
+            onClick={() => setLinkKind(selectedLinkId, "solid")}
+            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 px-3 py-2 text-sm transition-colors duration-150 ${
+              kind === "solid"
+                ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                : "bg-[var(--color-surface-2)] text-[var(--color-muted-fg)] hover:text-[var(--color-fg)]"
+            }`}
+          >
+            <svg width="26" height="8" aria-hidden="true">
+              <line x1="0" y1="4" x2="26" y2="4" stroke="currentColor" strokeWidth="2.5" />
+            </svg>
+            Sure
+          </button>
+          <button
+            onClick={() => setLinkKind(selectedLinkId, "dashed")}
+            className={`flex flex-1 cursor-pointer items-center justify-center gap-2 px-3 py-2 text-sm transition-colors duration-150 ${
+              kind === "dashed"
+                ? "bg-[var(--color-primary)] text-[var(--color-on-primary)]"
+                : "bg-[var(--color-surface-2)] text-[var(--color-muted-fg)] hover:text-[var(--color-fg)]"
+            }`}
+          >
+            <svg width="26" height="8" aria-hidden="true">
+              <line
+                x1="0"
+                y1="4"
+                x2="26"
+                y2="4"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeDasharray="5 4"
+              />
+            </svg>
+            Not sure
+          </button>
+        </div>
+        <p className="mb-4 text-xs text-[var(--color-muted-fg)]">
+          {kind === "dashed"
+            ? "Dashed = intermittent / uncertain relationship."
+            : "Solid = sure / direct relationship."}
         </p>
+
         <button onClick={() => deleteLink(selectedLinkId)} className={dangerBtn}>
           <IconTrash size={16} />
           Delete connection

@@ -48,6 +48,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   const moveBubble = useDiagram((s) => s.moveBubble);
   const handleBubbleConnectClick = useDiagram((s) => s.handleBubbleConnectClick);
   const addDrawing = useDiagram((s) => s.addDrawing);
+  const fitRequest = useDiagram((s) => s.fitRequest);
 
   // pan/zoom state
   const [scale, setScale] = useState(1);
@@ -160,6 +161,44 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, ppm]);
+
+  // Zoom-to-fit when requested: frame all bubbles (+ drawings) in view.
+  useEffect(() => {
+    if (fitRequest === 0) return;
+    const items = layer.bubbles;
+    if (items.length === 0) return;
+    let minX = Infinity,
+      minY = Infinity,
+      maxX = -Infinity,
+      maxY = -Infinity;
+    for (const b of items) {
+      minX = Math.min(minX, b.x - b.radius);
+      minY = Math.min(minY, b.y - b.radius);
+      maxX = Math.max(maxX, b.x + b.radius);
+      maxY = Math.max(maxY, b.y + b.radius);
+    }
+    for (const d of layer.drawings) {
+      for (let i = 0; i < d.points.length; i += 2) {
+        minX = Math.min(minX, d.points[i]);
+        maxX = Math.max(maxX, d.points[i]);
+        minY = Math.min(minY, d.points[i + 1]);
+        maxY = Math.max(maxY, d.points[i + 1]);
+      }
+    }
+    const pad = 60;
+    const contentW = maxX - minX + pad * 2;
+    const contentH = maxY - minY + pad * 2;
+    const newScale = Math.min(
+      2,
+      Math.max(0.15, Math.min(width / contentW, height / contentH))
+    );
+    setScale(newScale);
+    setPos({
+      x: width / 2 - ((minX + maxX) / 2) * newScale,
+      y: height / 2 - ((minY + maxY) / 2) * newScale,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitRequest]);
 
   function onBubbleClick(b: Bubble) {
     if (mode === "connect") {

@@ -7,6 +7,7 @@ import { loadDiagram, saveDiagram, clearDiagram } from "@/lib/storage";
 import {
   gridPositions,
   radiiFromValues,
+  clusterByCategory,
   DEFAULT_RADIUS,
 } from "@/lib/bubbleLayout";
 import { detectCategory, categoryColor } from "@/lib/categories";
@@ -33,6 +34,8 @@ interface UIState {
   /** First bubble clicked while in connect mode, waiting for the second. */
   pendingConnectId: string | null;
   saving: boolean;
+  /** Incremented to ask the Canvas to zoom-to-fit all content. */
+  fitRequest: number;
 }
 
 interface DiagramState extends UIState {
@@ -82,6 +85,11 @@ interface DiagramState extends UIState {
   // drawings
   addDrawing: (drawing: Drawing) => void;
   deleteDrawing: (id: string) => void;
+  clearDrawings: () => void;
+
+  // layout
+  arrangeByCategory: () => void;
+  requestFit: () => void;
 }
 
 /** Persist the diagram to localStorage (debounced). */
@@ -103,6 +111,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
   selectedLinkId: null,
   pendingConnectId: null,
   saving: false,
+  fitRequest: 0,
 
   hydrate: () => {
     const stored = loadDiagram();
@@ -236,7 +245,14 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     const layers = diagram.layers.map((l) => {
       if (l.id !== diagram.activeLayerId) return l;
       if (mode === "replace") {
-        return { ...l, bubbles: newBubbles, links: [] };
+        // Lay the fresh set out in clean category clusters.
+        const clustered = clusterByCategory(newBubbles);
+        const byId = new Map(clustered.map((p) => [p.id, p]));
+        const arranged = newBubbles.map((b) => {
+          const p = byId.get(b.id);
+          return p ? { ...b, x: p.x, y: p.y } : b;
+        });
+        return { ...l, bubbles: arranged, links: [] };
       }
       return { ...l, bubbles: [...l.bubbles, ...newBubbles] };
     });
@@ -244,6 +260,8 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
     persist(next, set);
+    // Frame the new content.
+    set((s) => ({ fitRequest: s.fitRequest + 1 }));
   },
 
   addBubble: (x, y) => {
@@ -423,4 +441,39 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     set({ diagram: next });
     persist(next, set);
   },
+
+  clearDrawings: () => {
+    const { diagram } = get();
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId ? { ...l, drawings: [] } : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    persist(next, set);
+  },
+
+  arrangeByCategory: () => {
+    const { diagram } = get();
+    const layer = get().activeLayer();
+    const positions = clusterByCategory(layer.bubbles);
+    const posById = new Map(positions.map((p) => [p.id, p]));
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            bubbles: l.bubbles.map((b) => {
+              const p = posById.get(b.id);
+              return p ? { ...b, x: p.x, y: p.y } : b;
+            }),
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next, selectedBubbleId: null, selectedLinkId: null });
+    persist(next, set);
+    // Re-frame the new arrangement on the next tick.
+    set((s) => ({ fitRequest: s.fitRequest + 1 }));
+  },
+
+  requestFit: () => set((s) => ({ fitRequest: s.fitRequest + 1 })),
 }));

@@ -5,6 +5,7 @@ import type { ParsedTable } from "@/lib/types";
 import { parseSpreadsheet } from "@/lib/parseSpreadsheet";
 import { parsePdf } from "@/lib/parsePdf";
 import { parseNumber, columnLooksNumeric } from "@/lib/parseNumber";
+import { partitionRows } from "@/lib/rowClassify";
 import { useDiagram } from "@/store/useDiagram";
 import { IconX, IconSpreadsheet, IconWarning, IconUpload } from "@/components/icons";
 
@@ -20,6 +21,7 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
   const [table, setTable] = useState<ParsedTable | null>(null);
   const [labelCol, setLabelCol] = useState<string>("");
   const [sizeCol, setSizeCol] = useState<string>(NONE);
+  const [excludeNotes, setExcludeNotes] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [fileName, setFileName] = useState<string>("");
@@ -57,14 +59,22 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
     }
   }
 
-  function handleGenerate(mode: "add" | "replace") {
-    if (!table || !labelCol) return;
-    const rows = table.rows
+  // Map rows to {label, value}, optionally dropping note-like rows.
+  function buildRows() {
+    if (!table || !labelCol) return { spaces: [], notes: [] };
+    const mapped = table.rows
       .map((r) => ({
         label: r[labelCol] ?? "",
         value: sizeCol !== NONE ? parseNumber(r[sizeCol]) : undefined,
       }))
       .filter((r) => r.label !== "" || r.value !== undefined);
+    return partitionRows(mapped);
+  }
+
+  function handleGenerate(mode: "add" | "replace") {
+    const { spaces, notes } = buildRows();
+    const rows = excludeNotes ? spaces : [...spaces, ...notes];
+    if (rows.length === 0) return;
     addBubblesFromRows(rows, mode, canvasSize);
     onClose();
   }
@@ -236,14 +246,45 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
               </table>
             </div>
 
-            <p className="mt-3 text-sm text-[var(--color-muted-fg)]">
-              Will create{" "}
-              <strong className="font-mono-accent text-[var(--color-fg)]">
-                {table.rows.length}
-              </strong>{" "}
-              bubbles
-              {sizeCol !== NONE && " sized by area"}.
-            </p>
+            {(() => {
+              const { spaces, notes } = buildRows();
+              const willCreate = excludeNotes
+                ? spaces.length
+                : spaces.length + notes.length;
+              return (
+                <div className="mt-3 space-y-2">
+                  {notes.length > 0 && (
+                    <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-[var(--color-surface-2)] p-2.5 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={excludeNotes}
+                        onChange={(e) => setExcludeNotes(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 cursor-pointer accent-[var(--color-primary)]"
+                      />
+                      <span className="text-[var(--color-fg)]">
+                        Skip{" "}
+                        <strong className="font-mono-accent">
+                          {notes.length}
+                        </strong>{" "}
+                        note-like rows (long sentences, totals, counts — not real
+                        spaces).
+                        <span className="mt-0.5 block text-xs text-[var(--color-muted-fg)]">
+                          Recommended — keeps the diagram focused on actual rooms.
+                        </span>
+                      </span>
+                    </label>
+                  )}
+                  <p className="text-sm text-[var(--color-muted-fg)]">
+                    Will create{" "}
+                    <strong className="font-mono-accent text-[var(--color-fg)]">
+                      {willCreate}
+                    </strong>{" "}
+                    bubbles
+                    {sizeCol !== NONE && " sized by area"}.
+                  </p>
+                </div>
+              );
+            })()}
 
             <div className="mt-5 flex flex-wrap justify-end gap-2">
               <button

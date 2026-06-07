@@ -14,6 +14,9 @@ import {
   IconReset,
   IconSun,
   IconMoon,
+  IconArrange,
+  IconEraser,
+  IconFit,
 } from "@/components/icons";
 
 interface Props {
@@ -42,6 +45,9 @@ const MODES: {
   },
 ];
 
+const iconBtn =
+  "flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40";
+
 export default function Toolbar({ onUploadClick, stageRef }: Props) {
   const mode = useDiagram((s) => s.mode);
   const setMode = useDiagram((s) => s.setMode);
@@ -52,6 +58,13 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
   const pendingConnectId = useDiagram((s) => s.pendingConnectId);
   const theme = useDiagram((s) => s.diagram.theme ?? "light");
   const toggleTheme = useDiagram((s) => s.toggleTheme);
+  const arrangeByCategory = useDiagram((s) => s.arrangeByCategory);
+  const requestFit = useDiagram((s) => s.requestFit);
+  const clearDrawings = useDiagram((s) => s.clearDrawings);
+  const layer = useDiagram((s) => s.activeLayer());
+
+  const hasBubbles = layer.bubbles.length > 0;
+  const hasDrawings = layer.drawings.length > 0;
 
   function handleExport(kind: "png" | "pdf") {
     const stage = stageRef.current;
@@ -61,10 +74,10 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
       <span className="font-mono-accent mr-1 flex items-center gap-1.5 text-sm font-bold text-[var(--color-primary-hover)]">
         <IconBubbles size={18} />
-        Bubble Diagram
+        <span className="hidden sm:inline">Bubble Diagram</span>
       </span>
 
       {/* Mode segmented control */}
@@ -89,7 +102,7 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
               }`}
             >
               <m.Icon size={16} />
-              {m.label}
+              <span className="hidden md:inline">{m.label}</span>
             </button>
           );
         })}
@@ -102,26 +115,57 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
         className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 hover:bg-[var(--color-accent-hover)]"
       >
         <IconUpload size={16} />
-        Upload data
+        <span className="hidden sm:inline">Upload data</span>
       </button>
 
+      {/* Layout group: arrange + fit */}
+      <button
+        onClick={arrangeByCategory}
+        disabled={!hasBubbles}
+        title="Auto-arrange bubbles into clusters by category"
+        aria-label="Arrange by category"
+        className={iconBtn}
+      >
+        <IconArrange size={16} />
+      </button>
+      <button
+        onClick={requestFit}
+        disabled={!hasBubbles}
+        title="Zoom to fit all bubbles"
+        aria-label="Zoom to fit"
+        className={iconBtn}
+      >
+        <IconFit size={16} />
+      </button>
+      <button
+        onClick={clearDrawings}
+        disabled={!hasDrawings}
+        title="Clear all measurement lines on this layer"
+        aria-label="Clear measurements"
+        className={iconBtn}
+      >
+        <IconEraser size={16} />
+      </button>
+
+      <div className="h-6 w-px bg-[var(--color-border)]" />
+
       {/* Scale */}
-      <label className="flex items-center gap-2 text-sm text-[var(--color-muted-fg)]">
-        Scale
+      <label className="flex items-center gap-1.5 text-sm text-[var(--color-muted-fg)]">
+        <span className="hidden lg:inline">Scale</span>
         <input
           type="number"
           min={1}
           value={ppm}
           onChange={(e) => setPpm(Number(e.target.value))}
           aria-label="Pixels per meter"
-          className="font-mono-accent w-20 cursor-text rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]"
+          className="font-mono-accent w-16 cursor-text rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]"
         />
         <span className="font-mono-accent text-xs">px/m</span>
       </label>
 
       <div className="h-6 w-px bg-[var(--color-border)]" />
 
-      {/* Export */}
+      {/* Export group */}
       <button
         onClick={() => handleExport("png")}
         title="Export current view as PNG"
@@ -139,11 +183,13 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
         PDF
       </button>
 
+      <div className="h-6 w-px bg-[var(--color-border)]" />
+
       <button
         onClick={toggleTheme}
         title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
         aria-label="Toggle theme"
-        className="flex cursor-pointer items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)]"
+        className={iconBtn}
       >
         {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
       </button>
@@ -155,15 +201,15 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
           }
         }}
         title="Clear all layers and start fresh"
-        className="flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-[var(--color-muted-fg)] transition-colors duration-150 hover:bg-[rgba(220,38,38,0.15)] hover:text-[var(--color-destructive-hover)]"
+        aria-label="Reset all"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[var(--color-muted-fg)] transition-colors duration-150 hover:bg-[rgba(220,38,38,0.15)] hover:text-[var(--color-destructive-hover)]"
       >
         <IconReset size={16} />
-        Reset
       </button>
 
       <div className="ml-auto flex items-center gap-3 text-xs text-[var(--color-muted-fg)]">
         {mode === "connect" && (
-          <span className="text-[var(--color-primary-hover)]">
+          <span className="hidden text-[var(--color-primary-hover)] md:inline">
             {pendingConnectId
               ? "Click a second bubble to connect…"
               : "Click a bubble to start a connection"}

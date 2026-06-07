@@ -1,8 +1,11 @@
 // Helpers for sizing and laying out newly created bubbles.
+import type { Bubble } from "./types";
+import { CATEGORY_ORDER, type CategoryId } from "./categories";
 
-const MIN_RADIUS = 26;
-const MAX_RADIUS = 120;
-const DEFAULT_RADIUS = 45;
+// Larger floor so labels stay readable even for tiny areas.
+const MIN_RADIUS = 38;
+const MAX_RADIUS = 130;
+const DEFAULT_RADIUS = 48;
 
 // Reference: a bubble of REFERENCE_AREA m² is drawn at REFERENCE_RADIUS px.
 // Area is strictly proportional to the value (radius ∝ √value), so a 12 m²
@@ -71,6 +74,77 @@ export function gridPositions(
       y: startY + row * cell,
     };
   });
+}
+
+/**
+ * Arrange bubbles into clean vertical clusters grouped by category. Each
+ * category becomes a column; bubbles flow top-to-bottom within it, packed by
+ * their own size. Returns new {id, x, y} positions; does not mutate input.
+ */
+export function clusterByCategory(
+  bubbles: Bubble[]
+): { id: string; x: number; y: number }[] {
+  // Group bubbles by category, preserving the canonical category order.
+  const groups = new Map<CategoryId, Bubble[]>();
+  for (const b of bubbles) {
+    const cat = (b.category ?? "other") as CategoryId;
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat)!.push(b);
+  }
+  const orderedCats = CATEGORY_ORDER.filter((c) => groups.has(c));
+
+  const colGap = 90; // space between category columns
+  const rowGap = 28; // vertical space between bubbles in a column
+  const topPad = 120; // leave room for the column header
+  const leftPad = 80;
+
+  const positions: { id: string; x: number; y: number }[] = [];
+  let cursorX = leftPad;
+
+  for (const cat of orderedCats) {
+    const items = groups.get(cat)!;
+    // Largest bubble in this column sets the column width.
+    const colMaxR = Math.max(...items.map((b) => b.radius));
+    const centerX = cursorX + colMaxR;
+
+    let y = topPad;
+    for (const b of items) {
+      y += b.radius;
+      positions.push({ id: b.id, x: centerX, y });
+      y += b.radius + rowGap;
+    }
+
+    cursorX = centerX + colMaxR + colGap;
+  }
+
+  return positions;
+}
+
+/** Category column headers for the cluster layout (x = column center). */
+export function clusterHeaders(
+  bubbles: Bubble[]
+): { category: CategoryId; x: number; y: number }[] {
+  const groups = new Map<CategoryId, Bubble[]>();
+  for (const b of bubbles) {
+    const cat = (b.category ?? "other") as CategoryId;
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat)!.push(b);
+  }
+  const orderedCats = CATEGORY_ORDER.filter((c) => groups.has(c));
+
+  const colGap = 90;
+  const leftPad = 80;
+  const headerY = 70;
+
+  const headers: { category: CategoryId; x: number; y: number }[] = [];
+  let cursorX = leftPad;
+  for (const cat of orderedCats) {
+    const items = groups.get(cat)!;
+    const colMaxR = Math.max(...items.map((b) => b.radius));
+    headers.push({ category: cat, x: cursorX + colMaxR, y: headerY });
+    cursorX = cursorX + colMaxR * 2 + colGap;
+  }
+  return headers;
 }
 
 export {

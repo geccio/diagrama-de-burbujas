@@ -127,6 +127,37 @@ export function IconBubbles(props: IconProps) {
   );
 }
 
+/** Layout / auto-arrange (grid of dots). */
+export function IconArrange(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  );
+}
+
+/** Eraser (clear drawings). */
+export function IconEraser(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="m7 21-4-4a2 2 0 0 1 0-2.8L13.5 3.7a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 20" />
+      <path d="M22 21H7M5 12l6 6" />
+    </svg>
+  );
+}
+
+/** Maximize / zoom-to-fit. */
+export function IconFit(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M16 21h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+    </svg>
+  );
+}
+
 /** Sun (light mode). */
 export function IconSun(props: IconProps) {
   return (

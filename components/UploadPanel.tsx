@@ -6,6 +6,7 @@ import { parseSpreadsheet } from "@/lib/parseSpreadsheet";
 import { parsePdf } from "@/lib/parsePdf";
 import { parseNumber, columnLooksNumeric } from "@/lib/parseNumber";
 import { useDiagram } from "@/store/useDiagram";
+import { IconX, IconSpreadsheet, IconWarning, IconUpload } from "@/components/icons";
 
 interface Props {
   onClose: () => void;
@@ -69,16 +70,24 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="w-full max-w-2xl rounded-xl bg-slate-800 p-6 shadow-2xl ring-1 ring-slate-700">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Upload data"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-2xl rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Upload data</h2>
           <button
             onClick={onClose}
-            className="rounded px-2 py-1 text-slate-400 hover:bg-slate-700 hover:text-white"
-            aria-label="Close"
+            className="cursor-pointer rounded-lg p-1.5 text-[var(--color-muted-fg)] transition-colors duration-150 hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]"
+            aria-label="Close dialog"
           >
-            ✕
+            <IconX size={18} />
           </button>
         </div>
 
@@ -92,13 +101,13 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
                 const f = e.dataTransfer.files?.[0];
                 if (f) handleFile(f);
               }}
-              className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-600 p-10 text-center hover:border-blue-400 hover:bg-slate-700/40"
+              className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border)] p-10 text-center transition-colors duration-150 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
             >
-              <span className="text-3xl">📄</span>
-              <p className="mt-2 font-medium">
+              <IconSpreadsheet size={40} className="text-[var(--color-muted-fg)]" />
+              <p className="mt-3 font-medium">
                 Drop a file here or click to browse
               </p>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-[var(--color-muted-fg)]">
                 Excel (.xlsx, .xls), CSV, or PDF
               </p>
             </div>
@@ -113,13 +122,17 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
               }}
             />
             {loading && (
-              <p className="mt-4 text-center text-sm text-blue-300">
+              <p className="mt-4 text-center text-sm text-[var(--color-accent-hover)]">
                 Parsing {fileName}…
               </p>
             )}
             {error && (
-              <p className="mt-4 rounded bg-red-900/40 p-3 text-sm text-red-200">
-                {error}
+              <p
+                role="alert"
+                className="mt-4 flex items-start gap-2 rounded-lg bg-[rgba(220,38,38,0.18)] p-3 text-sm text-red-200"
+              >
+                <IconWarning size={16} className="mt-0.5 shrink-0" />
+                <span>{error}</span>
               </p>
             )}
           </div>
@@ -128,26 +141,36 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
         {table && (
           <div>
             {table.approximate && (
-              <p className="mb-4 rounded bg-amber-900/40 p-3 text-sm text-amber-200">
-                ⚠️ PDF extraction is approximate — PDFs don&apos;t store true
-                table structure. Review the columns below before generating.
+              <p className="mb-4 flex items-start gap-2 rounded-lg bg-[rgba(245,158,11,0.16)] p-3 text-sm text-amber-200">
+                <IconWarning size={16} className="mt-0.5 shrink-0" />
+                <span>
+                  PDF extraction is approximate — PDFs don&apos;t store true
+                  table structure. Review the columns below before generating.
+                </span>
               </p>
             )}
-            <p className="mb-4 text-sm text-slate-300">
-              Detected <strong>{table.rows.length}</strong> rows and{" "}
-              <strong>{table.headers.length}</strong> columns from{" "}
-              <span className="text-slate-100">{fileName}</span>.
+            <p className="mb-4 text-sm text-[var(--color-muted-fg)]">
+              Detected{" "}
+              <strong className="font-mono-accent text-[var(--color-fg)]">
+                {table.rows.length}
+              </strong>{" "}
+              rows and{" "}
+              <strong className="font-mono-accent text-[var(--color-fg)]">
+                {table.headers.length}
+              </strong>{" "}
+              columns from{" "}
+              <span className="text-[var(--color-fg)]">{fileName}</span>.
             </p>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-300">
+                <span className="mb-1 block text-sm font-medium text-[var(--color-fg)]">
                   Label column (bubble text)
                 </span>
                 <select
                   value={labelCol}
                   onChange={(e) => setLabelCol(e.target.value)}
-                  className="w-full rounded bg-slate-900 px-3 py-2 text-sm ring-1 ring-slate-600 focus:ring-blue-400"
+                  className="w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]"
                 >
                   {table.headers.map((h) => (
                     <option key={h} value={h}>
@@ -177,19 +200,19 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
             </div>
 
             {/* Preview table */}
-            <div className="mt-4 max-h-48 overflow-auto rounded ring-1 ring-slate-700">
+            <div className="mt-4 max-h-48 overflow-auto rounded-lg border border-[var(--color-border)]">
               <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 bg-slate-900">
+                <thead className="sticky top-0 bg-[var(--color-surface-2)]">
                   <tr>
                     {table.headers.map((h) => (
                       <th
                         key={h}
-                        className={`px-2 py-1 font-medium ${
+                        className={`px-2 py-1.5 font-medium ${
                           h === labelCol
-                            ? "text-blue-300"
+                            ? "text-[var(--color-primary-hover)]"
                             : h === sizeCol
-                            ? "text-green-300"
-                            : "text-slate-400"
+                            ? "text-emerald-300"
+                            : "text-[var(--color-muted-fg)]"
                         }`}
                       >
                         {h}
@@ -201,9 +224,9 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
                 </thead>
                 <tbody>
                   {table.rows.slice(0, 8).map((r, i) => (
-                    <tr key={i} className="odd:bg-slate-800/40">
+                    <tr key={i} className="odd:bg-[var(--color-surface-2)]/40">
                       {table.headers.map((h) => (
-                        <td key={h} className="px-2 py-1 text-slate-300">
+                        <td key={h} className="px-2 py-1 text-[var(--color-fg)]">
                           {r[h]}
                         </td>
                       ))}
@@ -213,8 +236,12 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
               </table>
             </div>
 
-            <p className="mt-3 text-sm text-slate-400">
-              Will create <strong>{table.rows.length}</strong> bubbles
+            <p className="mt-3 text-sm text-[var(--color-muted-fg)]">
+              Will create{" "}
+              <strong className="font-mono-accent text-[var(--color-fg)]">
+                {table.rows.length}
+              </strong>{" "}
+              bubbles
               {sizeCol !== NONE && " sized by area"}.
             </p>
 
@@ -224,21 +251,22 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
                   setTable(null);
                   setError(null);
                 }}
-                className="rounded px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
+                className="cursor-pointer rounded-lg px-4 py-2 text-sm text-[var(--color-muted-fg)] transition-colors duration-150 hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]"
               >
                 ← Choose another file
               </button>
               <button
                 onClick={() => handleGenerate("add")}
-                className="rounded bg-slate-600 px-4 py-2 text-sm font-medium hover:bg-slate-500"
+                className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 py-2 text-sm font-medium text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)]"
               >
                 Add to layer
               </button>
               <button
                 onClick={() => handleGenerate("replace")}
                 disabled={!labelCol}
-                className="rounded bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-[var(--color-accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
               >
+                <IconUpload size={16} />
                 Replace layer
               </button>
             </div>

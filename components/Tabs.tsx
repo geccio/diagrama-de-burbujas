@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useDiagram } from "@/store/useDiagram";
+import { IconPlus, IconX } from "@/components/icons";
 
 export default function Tabs() {
   const diagram = useDiagram((s) => s.diagram);
@@ -26,17 +27,17 @@ export default function Tabs() {
   }
 
   return (
-    <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-700 bg-slate-800 px-2 py-1">
+    <div className="flex items-center gap-1 overflow-x-auto border-b border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1">
       {diagram.layers.map((l) => {
         const active = l.id === diagram.activeLayerId;
         const isEditing = editingId === l.id;
         return (
           <div
             key={l.id}
-            className={`group flex shrink-0 items-center gap-1 rounded-t px-3 py-1.5 text-sm ${
+            className={`group flex shrink-0 items-center gap-1 rounded-t-lg px-3 py-1.5 text-sm transition-colors duration-150 ${
               active
-                ? "bg-slate-900 text-white"
-                : "bg-slate-700/50 text-slate-300 hover:bg-slate-700"
+                ? "bg-[var(--color-surface)] text-[var(--color-fg)] shadow-[inset_0_2px_0_var(--color-primary)]"
+                : "bg-transparent text-[var(--color-muted-fg)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]"
             }`}
           >
             {isEditing ? (
@@ -49,18 +50,19 @@ export default function Tabs() {
                   if (e.key === "Enter") commitEdit();
                   if (e.key === "Escape") setEditingId(null);
                 }}
-                className="w-28 rounded bg-slate-950 px-1 text-sm outline-none ring-1 ring-blue-400"
+                aria-label="Layer name"
+                className="w-28 rounded bg-[var(--color-bg)] px-1 text-sm text-[var(--color-fg)] outline-none ring-1 ring-[var(--color-ring)]"
               />
             ) : (
               <button
                 onClick={() => setActiveLayer(l.id)}
                 onDoubleClick={() => startEdit(l.id, l.name)}
-                className="max-w-[160px] truncate"
+                className="max-w-[160px] cursor-pointer truncate"
                 title="Double-click to rename"
               >
                 {l.name}
-                <span className="ml-1 text-xs text-slate-500">
-                  ({l.bubbles.length})
+                <span className="font-mono-accent ml-1.5 text-xs text-[var(--color-muted-fg)]">
+                  {l.bubbles.length}
                 </span>
               </button>
             )}
@@ -75,10 +77,10 @@ export default function Tabs() {
                     deleteLayer(l.id);
                   }
                 }}
-                className="ml-1 hidden text-slate-400 hover:text-red-400 group-hover:inline"
-                aria-label="Delete layer"
+                className="ml-1 hidden cursor-pointer rounded p-0.5 text-[var(--color-muted-fg)] transition-colors duration-150 hover:text-[var(--color-destructive-hover)] group-hover:inline-flex"
+                aria-label={`Delete layer ${l.name}`}
               >
-                ✕
+                <IconX size={14} />
               </button>
             )}
           </div>
@@ -86,10 +88,11 @@ export default function Tabs() {
       })}
       <button
         onClick={addLayer}
-        className="ml-1 shrink-0 rounded px-2 py-1 text-lg leading-none text-slate-300 hover:bg-slate-700 hover:text-white"
+        className="ml-1 flex shrink-0 cursor-pointer items-center justify-center rounded-lg p-1.5 text-[var(--color-muted-fg)] transition-colors duration-150 hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]"
         title="Add layer"
+        aria-label="Add layer"
       >
-        +
+        <IconPlus size={16} />
       </button>
     </div>
   );

@@ -7,6 +7,7 @@ import Toolbar from "@/components/Toolbar";
 import Tabs from "@/components/Tabs";
 import PropertyPanel from "@/components/PropertyPanel";
 import UploadPanel from "@/components/UploadPanel";
+import { IconBubbles, IconUpload } from "@/components/icons";
 import { useDiagram } from "@/store/useDiagram";
 
 // Konva touches the DOM/canvas — load it only in the browser.
@@ -71,16 +72,21 @@ function EmptyHint({ onUploadClick }: { onUploadClick: () => void }) {
   if (layer.bubbles.length > 0 || layer.drawings.length > 0) return null;
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-      <div className="pointer-events-auto rounded-xl bg-slate-800/80 p-6 text-center ring-1 ring-slate-700 backdrop-blur">
-        <p className="text-lg font-medium">This layer is empty</p>
-        <p className="mt-1 text-sm text-slate-400">
+      <div className="pointer-events-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/85 p-7 text-center backdrop-blur">
+        <IconBubbles
+          size={40}
+          className="mx-auto text-[var(--color-primary-hover)]"
+        />
+        <p className="mt-3 text-lg font-medium">This layer is empty</p>
+        <p className="mt-1 text-sm text-[var(--color-muted-fg)]">
           Upload an Excel, CSV, or PDF to generate bubbles from your data.
         </p>
         <button
           onClick={onUploadClick}
-          className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500"
+          className="mx-auto mt-4 flex cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-[var(--color-accent-hover)]"
         >
-          ⬆ Upload data
+          <IconUpload size={16} />
+          Upload data
         </button>
       </div>
     </div>

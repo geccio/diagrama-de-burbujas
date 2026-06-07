@@ -14,6 +14,7 @@ import type Konva from "konva";
 import { useDiagram } from "@/store/useDiagram";
 import type { Bubble } from "@/lib/types";
 import { uid } from "@/lib/id";
+import BubbleLabel from "@/components/BubbleLabel";
 
 interface Props {
   width: number;
@@ -289,32 +290,11 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
                 shadowBlur={6}
                 shadowOpacity={0.3}
               />
-              <Text
-                text={b.label}
-                fontSize={13}
-                fontStyle="bold"
-                fill="#0b1220"
-                width={b.radius * 2}
-                height={b.radius * 2}
-                offsetX={b.radius}
-                offsetY={b.radius}
-                align="center"
-                verticalAlign="middle"
-                wrap="word"
-                listening={false}
+              <BubbleLabel
+                label={b.label}
+                radius={b.radius}
+                value={b.value}
               />
-              {typeof b.value === "number" && (
-                <Text
-                  text={`${b.value} m²`}
-                  fontSize={11}
-                  fill="#1e293b"
-                  width={b.radius * 2}
-                  offsetX={b.radius}
-                  y={b.radius * 0.35}
-                  align="center"
-                  listening={false}
-                />
-              )}
             </Group>
           );
         })}

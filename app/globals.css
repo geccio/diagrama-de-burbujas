@@ -1,17 +1,61 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  /* Semantic color tokens (dark canvas tool: purple + teal accents). */
+  --color-primary: #7c3aed;
+  --color-primary-hover: #8b5cf6;
+  --color-on-primary: #ffffff;
+  --color-accent: #0891b2;
+  --color-accent-hover: #06a6c9;
+  --color-bg: #0f1115;
+  --color-surface: #181b22;
+  --color-surface-2: #20242d;
+  --color-border: rgba(255, 255, 255, 0.09);
+  --color-fg: #f1f5f9;
+  --color-muted-fg: #94a3b8;
+  --color-destructive: #dc2626;
+  --color-destructive-hover: #ef4444;
+  --color-ring: #8b5cf6;
+}
 
 html,
 body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #0f172a;
-  color: #e2e8f0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* Monospace accent for brand + numeric/technical UI (scale, tabs). */
+.font-mono-accent {
+  font-family: "Space Mono", ui-monospace, "Cascadia Code", monospace;
+}
+
+/* Consistent visible focus ring for keyboard users across the app. */
+:where(button, a, input, select, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-ring);
+  border-radius: 6px;
+}
+
+/* Respect reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

@@ -15,6 +15,8 @@ export interface Bubble {
   color: string;
   /** Functional category (drives color when set). */
   category?: CategoryId;
+  /** Optional floor / level label (e.g. "Ground", "P2"). */
+  floor?: string;
 }
 
 /** Relationship strength a connection represents. */

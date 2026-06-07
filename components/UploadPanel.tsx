@@ -7,7 +7,15 @@ import { parsePdf } from "@/lib/parsePdf";
 import { parseNumber, columnLooksNumeric } from "@/lib/parseNumber";
 import { partitionRows } from "@/lib/rowClassify";
 import { useDiagram } from "@/store/useDiagram";
-import { IconX, IconSpreadsheet, IconWarning, IconUpload } from "@/components/icons";
+import { loadOllamaSettings, describeOllamaError } from "@/lib/ollama";
+import { aiMapColumns, normalizeCategory } from "@/lib/aiTasks";
+import {
+  IconX,
+  IconSpreadsheet,
+  IconWarning,
+  IconUpload,
+  IconSparkles,
+} from "@/components/icons";
 
 interface Props {
   onClose: () => void;
@@ -21,12 +29,16 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
   const [table, setTable] = useState<ParsedTable | null>(null);
   const [labelCol, setLabelCol] = useState<string>("");
   const [sizeCol, setSizeCol] = useState<string>(NONE);
+  const [categoryCol, setCategoryCol] = useState<string>(NONE);
+  const [floorCol, setFloorCol] = useState<string>(NONE);
   const [excludeNotes, setExcludeNotes] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [aiMapping, setAiMapping] = useState(false);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>("");
 
-  const addBubblesFromRows = useDiagram((s) => s.addBubblesFromRows);
+  const addSpaces = useDiagram((s) => s.addSpaces);
 
   async function handleFile(file: File) {
     setError(null);
@@ -59,14 +71,26 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
     }
   }
 
-  // Map rows to {label, value}, optionally dropping note-like rows.
+  // Map rows to space objects, optionally dropping note-like rows.
   function buildRows() {
     if (!table || !labelCol) return { spaces: [], notes: [] };
     const mapped = table.rows
-      .map((r) => ({
-        label: r[labelCol] ?? "",
-        value: sizeCol !== NONE ? parseNumber(r[sizeCol]) : undefined,
-      }))
+      .map((r) => {
+        const value = sizeCol !== NONE ? parseNumber(r[sizeCol]) : undefined;
+        const category =
+          categoryCol !== NONE
+            ? normalizeCategory(r[categoryCol])
+            : undefined;
+        const floor =
+          floorCol !== NONE ? (r[floorCol] || undefined) : undefined;
+        return {
+          // partitionRows expects {label, value}
+          label: r[labelCol] ?? "",
+          value,
+          category,
+          floor,
+        };
+      })
       .filter((r) => r.label !== "" || r.value !== undefined);
     return partitionRows(mapped);
   }
@@ -75,8 +99,42 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
     const { spaces, notes } = buildRows();
     const rows = excludeNotes ? spaces : [...spaces, ...notes];
     if (rows.length === 0) return;
-    addBubblesFromRows(rows, mode, canvasSize);
+    addSpaces(
+      rows.map((r) => ({
+        name: r.label,
+        area: r.value,
+        category: r.category,
+        floor: r.floor,
+      })),
+      mode,
+      canvasSize
+    );
     onClose();
+  }
+
+  // Use Ollama to map columns → fields.
+  async function handleAiMap() {
+    if (!table) return;
+    setAiMapping(true);
+    setAiMsg(null);
+    try {
+      const mapping = await aiMapColumns(
+        loadOllamaSettings(),
+        table.headers,
+        table.rows
+      );
+      const has = (h?: string | null) =>
+        h && table.headers.includes(h) ? h : null;
+      if (has(mapping.name)) setLabelCol(mapping.name!);
+      setSizeCol(has(mapping.area) ?? NONE);
+      setCategoryCol(has(mapping.category) ?? NONE);
+      setFloorCol(has(mapping.floor) ?? NONE);
+      setAiMsg("Columns mapped by AI — review below.");
+    } catch (e) {
+      setAiMsg(describeOllamaError(e));
+    } finally {
+      setAiMapping(false);
+    }
   }
 
   return (
@@ -172,41 +230,71 @@ export default function UploadPanel({ onClose, canvasSize }: Props) {
               <span className="text-[var(--color-fg)]">{fileName}</span>.
             </p>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-[var(--color-fg)]">
-                  Label column (bubble text)
+            {/* AI auto-map */}
+            <div className="mb-3 flex items-center gap-2">
+              <button
+                onClick={handleAiMap}
+                disabled={aiMapping}
+                title="Use Ollama to map columns to name / area / category / floor"
+                className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)] disabled:opacity-50"
+              >
+                <IconSparkles size={16} />
+                {aiMapping ? "Mapping…" : "AI auto-map columns"}
+              </button>
+              {aiMsg && (
+                <span className="text-xs text-[var(--color-muted-fg)]">
+                  {aiMsg}
                 </span>
-                <select
-                  value={labelCol}
-                  onChange={(e) => setLabelCol(e.target.value)}
-                  className="w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]"
-                >
-                  {table.headers.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              )}
+            </div>
 
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-slate-300">
-                  Size column (area — optional)
-                </span>
-                <select
-                  value={sizeCol}
-                  onChange={(e) => setSizeCol(e.target.value)}
-                  className="w-full rounded bg-slate-900 px-3 py-2 text-sm ring-1 ring-slate-600 focus:ring-blue-400"
-                >
-                  <option value={NONE}>— None (uniform size) —</option>
-                  {table.headers.map((h) => (
-                    <option key={h} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(
+                [
+                  {
+                    label: "Name column (bubble text)",
+                    value: labelCol,
+                    set: setLabelCol,
+                    none: false,
+                  },
+                  {
+                    label: "Area column (m² — optional)",
+                    value: sizeCol,
+                    set: setSizeCol,
+                    none: true,
+                  },
+                  {
+                    label: "Category column (optional)",
+                    value: categoryCol,
+                    set: setCategoryCol,
+                    none: true,
+                  },
+                  {
+                    label: "Floor column (optional)",
+                    value: floorCol,
+                    set: setFloorCol,
+                    none: true,
+                  },
+                ] as const
+              ).map((field) => (
+                <label key={field.label} className="block">
+                  <span className="mb-1 block text-sm font-medium text-[var(--color-fg)]">
+                    {field.label}
+                  </span>
+                  <select
+                    value={field.value}
+                    onChange={(e) => field.set(e.target.value)}
+                    className="w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]"
+                  >
+                    {field.none && <option value={NONE}>— None —</option>}
+                    {table.headers.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
             </div>
 
             {/* Preview table */}

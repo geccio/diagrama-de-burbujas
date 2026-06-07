@@ -52,7 +52,17 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   const pushHistory = useDiagram((s) => s.pushHistory);
   const updateBackground = useDiagram((s) => s.updateBackground);
   const fitRequest = useDiagram((s) => s.fitRequest);
+  const calibrating = useDiagram((s) => s.calibrating);
+  const endCalibration = useDiagram((s) => s.endCalibration);
+  const setPixelsPerMeter = useDiagram((s) => s.setPixelsPerMeter);
+  const selectedBubbleIds = useDiagram((s) => s.selectedBubbleIds);
+  const setMultiSelection = useDiagram((s) => s.setMultiSelection);
+  const bulkMove = useDiagram((s) => s.bulkMove);
   const background = layer.background;
+  const multiSel = useMemo(
+    () => new Set(selectedBubbleIds),
+    [selectedBubbleIds]
+  );
 
   // pan/zoom state
   const [scale, setScale] = useState(1);
@@ -64,6 +74,16 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
 
   // hovered bubble (for tooltip)
   const [hoverId, setHoverId] = useState<string | null>(null);
+
+  // scale-calibration: collect 2 points, then ask for the real length.
+  const [calPts, setCalPts] = useState<number[]>([]);
+
+  // box-selection (Shift+drag on empty canvas in select mode)
+  const [selBox, setSelBox] = useState<
+    { x1: number; y1: number; x2: number; y2: number } | null
+  >(null);
+  const selectingRef = useRef(false);
+  const dragPrev = useRef<{ x: number; y: number } | null>(null);
 
   const internalRef = useRef<Konva.Stage | null>(null);
   function setStageRef(node: Konva.Stage | null) {
@@ -129,6 +149,16 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   ) {
     const clickedEmpty = e.target === e.target.getStage();
 
+    if (calibrating) {
+      const w = getWorldPointer();
+      if (!w) return;
+      setCalPts((pts) => {
+        if (pts.length >= 4) return [w.x, w.y]; // restart after a full line
+        return [...pts, w.x, w.y];
+      });
+      return;
+    }
+
     if (mode === "draw") {
       const w = getWorldPointer();
       if (!w) return;
@@ -146,8 +176,45 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
     }
   }
 
+  // Box-selection: Shift+drag on empty canvas in select mode.
+  function handleMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
+    if (
+      mode === "select" &&
+      !calibrating &&
+      e.evt.shiftKey &&
+      e.target === e.target.getStage()
+    ) {
+      const w = getWorldPointer();
+      if (!w) return;
+      selectingRef.current = true;
+      setSelBox({ x1: w.x, y1: w.y, x2: w.x, y2: w.y });
+    }
+  }
+
+  function handleMouseUp() {
+    if (selectingRef.current && selBox) {
+      const minX = Math.min(selBox.x1, selBox.x2);
+      const maxX = Math.max(selBox.x1, selBox.x2);
+      const minY = Math.min(selBox.y1, selBox.y2);
+      const maxY = Math.max(selBox.y1, selBox.y2);
+      const ids = layer.bubbles
+        .filter(
+          (b) => b.x >= minX && b.x <= maxX && b.y >= minY && b.y <= maxY
+        )
+        .map((b) => b.id);
+      setMultiSelection(ids);
+    }
+    selectingRef.current = false;
+    setSelBox(null);
+  }
+
   function handleMouseMove() {
-    if (mode === "draw" && draft) {
+    if (selectingRef.current && selBox) {
+      const w = getWorldPointer();
+      if (w) setSelBox((b) => (b ? { ...b, x2: w.x, y2: w.y } : b));
+      return;
+    }
+    if ((mode === "draw" && draft) || (calibrating && calPts.length === 2)) {
       const w = getWorldPointer();
       if (!w) return;
       setCursor(w);
@@ -165,6 +232,11 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, ppm]);
+
+  // Clear the in-progress calibration line whenever calibration toggles off.
+  useEffect(() => {
+    if (!calibrating) setCalPts([]);
+  }, [calibrating]);
 
   // Zoom-to-fit when requested: frame all bubbles (+ drawings) in view.
   useEffect(() => {
@@ -236,7 +308,21 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
       : draft.points
     : null;
 
+  // The calibration line: full when 2 points set, rubber-band while placing 2nd.
+  const calLinePoints: number[] | null =
+    calPts.length === 4
+      ? calPts
+      : calPts.length === 2 && cursor
+      ? [calPts[0], calPts[1], cursor.x, cursor.y]
+      : null;
+
+  const calLengthPx =
+    calPts.length === 4
+      ? Math.hypot(calPts[2] - calPts[0], calPts[3] - calPts[1])
+      : 0;
+
   return (
+    <>
     <Stage
       ref={setStageRef}
       width={width}
@@ -245,11 +331,13 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
       scaleY={scale}
       x={pos.x}
       y={pos.y}
-      draggable={mode !== "draw"}
+      draggable={mode !== "draw" && !calibrating && !selBox}
       onWheel={handleWheel}
       onClick={handleStageClick}
       onTap={handleStageClick}
+      onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
       onDblClick={() => mode === "draw" && finishDraft()}
       onDragEnd={(e) => {
         // Stage drag = pan. Only update when the stage itself moved.
@@ -326,6 +414,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
       <KonvaLayer>
         {layer.bubbles.map((b) => {
           const isSelected = b.id === selectedBubbleId;
+          const isMulti = multiSel.has(b.id);
           const isPending = b.id === pendingConnectId;
           return (
             <Group
@@ -333,10 +422,21 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
               x={b.x}
               y={b.y}
               draggable={mode === "select"}
-              onDragStart={() => pushHistory()}
+              onDragStart={() => {
+                pushHistory();
+                dragPrev.current = { x: b.x, y: b.y };
+              }}
               onDragMove={(e) => {
-                // live-update so links follow during drag
-                moveBubble(b.id, e.target.x(), e.target.y());
+                if (isMulti && selectedBubbleIds.length > 1) {
+                  // Move the whole multi-selection by this bubble's delta.
+                  const prev = dragPrev.current;
+                  if (prev) {
+                    bulkMove(e.target.x() - prev.x, e.target.y() - prev.y);
+                    dragPrev.current = { x: e.target.x(), y: e.target.y() };
+                  }
+                } else {
+                  moveBubble(b.id, e.target.x(), e.target.y());
+                }
               }}
               onClick={(e) => {
                 e.cancelBubble = true;
@@ -352,17 +452,19 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
               <Circle
                 radius={b.radius}
                 fill={b.color}
-                opacity={isSelected || b.id === hoverId ? 0.95 : 0.85}
+                opacity={isSelected || isMulti || b.id === hoverId ? 0.95 : 0.85}
                 stroke={
                   isPending
                     ? "#fde047"
+                    : isMulti
+                    ? "#7c3aed"
                     : isSelected
                     ? colors.label === "#0b1220"
                       ? "#0f172a"
                       : "#ffffff"
                     : "rgba(15,23,42,0.35)"
                 }
-                strokeWidth={isPending || isSelected ? 4 : 1.5}
+                strokeWidth={isPending || isSelected || isMulti ? 4 : 1.5}
                 shadowColor="black"
                 shadowBlur={b.id === hoverId ? 12 : 6}
                 shadowOpacity={b.id === hoverId ? 0.35 : 0.2}
@@ -371,6 +473,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
                 label={b.label}
                 radius={b.radius}
                 value={b.value}
+                floor={b.floor}
               />
             </Group>
           );
@@ -444,10 +547,137 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
             ))}
           </Group>
         )}
+
+        {/* Calibration line preview */}
+        {calibrating && calLinePoints && (
+          <Group>
+            <Line
+              points={calLinePoints}
+              stroke="#ef4444"
+              strokeWidth={3 / scale}
+            />
+            {[0, 1].map((i) => (
+              <Circle
+                key={i}
+                x={i === 0 ? calLinePoints[0] : calLinePoints[2]}
+                y={i === 0 ? calLinePoints[1] : calLinePoints[3]}
+                radius={5 / scale}
+                fill="#ef4444"
+              />
+            ))}
+          </Group>
+        )}
+
+        {/* Box-selection rectangle */}
+        {selBox && (
+          <Rect
+            x={Math.min(selBox.x1, selBox.x2)}
+            y={Math.min(selBox.y1, selBox.y2)}
+            width={Math.abs(selBox.x2 - selBox.x1)}
+            height={Math.abs(selBox.y2 - selBox.y1)}
+            fill="rgba(124,58,237,0.12)"
+            stroke="#7c3aed"
+            strokeWidth={1 / scale}
+            dash={[6 / scale, 4 / scale]}
+          />
+        )}
       </KonvaLayer>
     </Stage>
+
+      {/* Calibration overlay: banner while drawing, dialog when line is set */}
+      {calibrating && calPts.length < 4 && (
+        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-lg bg-[var(--color-surface)]/95 px-4 py-2 text-sm shadow-lg ring-1 ring-[var(--color-border)]">
+          {calPts.length === 0
+            ? "Click the start of a known length on your floor plan"
+            : "Click the end point of the known length"}
+          <button
+            onClick={endCalibration}
+            className="pointer-events-auto ml-3 cursor-pointer text-[var(--color-muted-fg)] underline hover:text-[var(--color-fg)]"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {calibrating && calPts.length === 4 && (
+        <CalibrationDialog
+          lengthPx={calLengthPx}
+          onCancel={() => {
+            setCalPts([]);
+            endCalibration();
+          }}
+          onConfirm={(meters) => {
+            if (meters > 0) setPixelsPerMeter(calLengthPx / meters);
+            setCalPts([]);
+            endCalibration();
+          }}
+        />
+      )}
+    </>
   );
 });
+
+function CalibrationDialog({
+  lengthPx,
+  onConfirm,
+  onCancel,
+}: {
+  lengthPx: number;
+  onConfirm: (meters: number) => void;
+  onCancel: () => void;
+}) {
+  const [val, setVal] = useState("");
+  const meters = parseFloat(val);
+  const valid = isFinite(meters) && meters > 0;
+  return (
+    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/30">
+      <div className="w-80 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
+        <h3 className="mb-1 text-sm font-semibold">Set scale</h3>
+        <p className="mb-3 text-xs text-[var(--color-muted-fg)]">
+          You drew a line of{" "}
+          <span className="font-mono-accent">{Math.round(lengthPx)} px</span>.
+          What is its real length in meters?
+        </p>
+        <input
+          autoFocus
+          type="number"
+          min={0}
+          step="0.01"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && valid) onConfirm(meters);
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="e.g. 5"
+          className="mb-1 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm text-[var(--color-fg)] focus:border-[var(--color-ring)]"
+        />
+        {valid && (
+          <p className="mb-3 text-xs text-[var(--color-muted-fg)]">
+            New scale:{" "}
+            <span className="font-mono-accent">
+              {(lengthPx / meters).toFixed(1)} px/m
+            </span>
+          </p>
+        )}
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="cursor-pointer rounded-lg px-3 py-1.5 text-sm text-[var(--color-muted-fg)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => valid && onConfirm(meters)}
+            disabled={!valid}
+            className="cursor-pointer rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-primary)] hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+          >
+            Set scale
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // --- geometry helpers ---
 

@@ -31,11 +31,15 @@ interface UIState {
   mode: Mode;
   selectedBubbleId: string | null;
   selectedLinkId: string | null;
+  /** Multi-selected bubble ids (box-select). Empty when single/none. */
+  selectedBubbleIds: string[];
   /** First bubble clicked while in connect mode, waiting for the second. */
   pendingConnectId: string | null;
   saving: boolean;
   /** Incremented to ask the Canvas to zoom-to-fit all content. */
   fitRequest: number;
+  /** When true, the canvas is in 2-click scale-calibration mode. */
+  calibrating: boolean;
   /** Undo/redo availability (counts) for the UI. */
   canUndo: boolean;
   canRedo: boolean;
@@ -54,6 +58,12 @@ interface DiagramState extends UIState {
   setMode: (mode: Mode) => void;
   selectBubble: (id: string | null) => void;
   selectLink: (id: string | null) => void;
+  setMultiSelection: (ids: string[]) => void;
+  // bulk ops on the current multi-selection
+  bulkMove: (dx: number, dy: number) => void;
+  bulkSetCategory: (category: import("@/lib/categories").CategoryId) => void;
+  bulkSetColor: (color: string) => void;
+  bulkDelete: () => void;
 
   // layers
   activeLayer: () => Layer;
@@ -64,6 +74,8 @@ interface DiagramState extends UIState {
 
   // scale
   setPixelsPerMeter: (ppm: number) => void;
+  startCalibration: () => void;
+  endCalibration: () => void;
 
   // theme
   setTheme: (theme: Theme) => void;
@@ -74,6 +86,19 @@ interface DiagramState extends UIState {
     rows: { label: string; value?: number }[],
     mode: "add" | "replace",
     canvasSize: { width: number; height: number }
+  ) => void;
+  addSpaces: (
+    spaces: {
+      name: string;
+      area?: number;
+      category?: import("@/lib/categories").CategoryId;
+      floor?: string;
+    }[],
+    mode: "add" | "replace",
+    canvasSize: { width: number; height: number }
+  ) => void;
+  addLinksByNames: (
+    pairs: { a: string; b: string; kind?: import("@/lib/types").LinkKind }[]
   ) => void;
   addBubble: (x: number, y: number) => void;
   moveBubble: (id: string, x: number, y: number) => void;
@@ -156,9 +181,11 @@ export const useDiagram = create<DiagramState>((set, get) => ({
   mode: "select",
   selectedBubbleId: null,
   selectedLinkId: null,
+  selectedBubbleIds: [],
   pendingConnectId: null,
   saving: false,
   fitRequest: 0,
+  calibrating: false,
   canUndo: false,
   canRedo: false,
 
@@ -205,8 +232,96 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       selectedLinkId: null,
     }),
 
-  selectBubble: (id) => set({ selectedBubbleId: id, selectedLinkId: null }),
-  selectLink: (id) => set({ selectedLinkId: id, selectedBubbleId: null }),
+  selectBubble: (id) =>
+    set({ selectedBubbleId: id, selectedLinkId: null, selectedBubbleIds: [] }),
+  selectLink: (id) =>
+    set({ selectedLinkId: id, selectedBubbleId: null, selectedBubbleIds: [] }),
+
+  setMultiSelection: (ids) =>
+    set({
+      selectedBubbleIds: ids,
+      selectedBubbleId: null,
+      selectedLinkId: null,
+    }),
+
+  bulkMove: (dx, dy) => {
+    const { diagram, selectedBubbleIds } = get();
+    if (selectedBubbleIds.length === 0) return;
+    const sel = new Set(selectedBubbleIds);
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            bubbles: l.bubbles.map((b) =>
+              sel.has(b.id) ? { ...b, x: b.x + dx, y: b.y + dy } : b
+            ),
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    persist(next, set); // history handled at drag start
+  },
+
+  bulkSetCategory: (category) => {
+    const { diagram, selectedBubbleIds } = get();
+    if (selectedBubbleIds.length === 0) return;
+    const sel = new Set(selectedBubbleIds);
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            bubbles: l.bubbles.map((b) =>
+              sel.has(b.id)
+                ? { ...b, category, color: categoryColor(category) }
+                : b
+            ),
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    commit(diagram, next, set);
+  },
+
+  bulkSetColor: (color) => {
+    const { diagram, selectedBubbleIds } = get();
+    if (selectedBubbleIds.length === 0) return;
+    const sel = new Set(selectedBubbleIds);
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            bubbles: l.bubbles.map((b) =>
+              sel.has(b.id) ? { ...b, color } : b
+            ),
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    commit(diagram, next, set);
+  },
+
+  bulkDelete: () => {
+    const { diagram, selectedBubbleIds } = get();
+    if (selectedBubbleIds.length === 0) return;
+    const sel = new Set(selectedBubbleIds);
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            bubbles: l.bubbles.filter((b) => !sel.has(b.id)),
+            links: l.links.filter(
+              (k) => !sel.has(k.fromBubbleId) && !sel.has(k.toBubbleId)
+            ),
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next, selectedBubbleIds: [] });
+    commit(diagram, next, set);
+  },
 
   activeLayer: () => {
     const { diagram } = get();
@@ -266,6 +381,15 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     set({ diagram: next });
     persist(next, set);
   },
+
+  startCalibration: () =>
+    set({
+      calibrating: true,
+      mode: "select",
+      selectedBubbleId: null,
+      selectedLinkId: null,
+    }),
+  endCalibration: () => set({ calibrating: false }),
 
   setTheme: (theme) => {
     const { diagram } = get();
@@ -328,9 +452,89 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     set((s) => ({ fitRequest: s.fitRequest + 1 }));
   },
 
-  addBubble: (x, y) => {
+  addSpaces: (spaces, mode, canvasSize) => {
+    const { diagram } = get();
+    const radii = radiiFromValues(spaces.map((s) => s.area));
+    const positions = gridPositions(
+      spaces.length,
+      radii,
+      canvasSize.width || 1200,
+      canvasSize.height || 800
+    );
+    const newBubbles: Bubble[] = spaces.map((s, i) => {
+      const label = s.name || "(blank)";
+      const category = s.category ?? detectCategory(label);
+      return {
+        id: uid("bubble"),
+        x: positions[i].x,
+        y: positions[i].y,
+        radius: radii[i],
+        label,
+        value: s.area,
+        category,
+        floor: s.floor,
+        color: categoryColor(category),
+      };
+    });
+
+    const layers = diagram.layers.map((l) => {
+      if (l.id !== diagram.activeLayerId) return l;
+      if (mode === "replace") {
+        const clustered = clusterByCategory(newBubbles);
+        const byId = new Map(clustered.map((p) => [p.id, p]));
+        const arranged = newBubbles.map((b) => {
+          const p = byId.get(b.id);
+          return p ? { ...b, x: p.x, y: p.y } : b;
+        });
+        return { ...l, bubbles: arranged, links: [] };
+      }
+      return { ...l, bubbles: [...l.bubbles, ...newBubbles] };
+    });
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    commit(diagram, next, set);
+    set((s) => ({ fitRequest: s.fitRequest + 1 }));
+  },
+
+  addLinksByNames: (pairs) => {
     const { diagram } = get();
     const layer = get().activeLayer();
+    // name (lowercased) -> bubble id
+    const idByName = new Map<string, string>();
+    for (const b of layer.bubbles) {
+      idByName.set(b.label.toLowerCase().trim(), b.id);
+    }
+    const existing = new Set(
+      layer.links.map((k) => [k.fromBubbleId, k.toBubbleId].sort().join("|"))
+    );
+    const newLinks: Link[] = [];
+    for (const p of pairs) {
+      const fromId = idByName.get(p.a?.toLowerCase().trim() ?? "");
+      const toId = idByName.get(p.b?.toLowerCase().trim() ?? "");
+      if (!fromId || !toId || fromId === toId) continue;
+      const key = [fromId, toId].sort().join("|");
+      if (existing.has(key)) continue;
+      existing.add(key);
+      newLinks.push({
+        id: uid("link"),
+        fromBubbleId: fromId,
+        toBubbleId: toId,
+        kind: p.kind ?? "solid",
+      });
+    }
+    if (newLinks.length === 0) return;
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? { ...l, links: [...l.links, ...newLinks] }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    commit(diagram, next, set);
+  },
+
+  addBubble: (x, y) => {
+    const { diagram } = get();
     const bubble: Bubble = {
       id: uid("bubble"),
       x,

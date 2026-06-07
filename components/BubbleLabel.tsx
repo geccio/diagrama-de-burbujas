@@ -8,15 +8,19 @@ interface Props {
   label: string;
   radius: number;
   value?: number;
+  floor?: string;
 }
 
 /**
  * Renders a bubble's label (auto-sized + truncated to fit the circle) plus an
- * optional area value line beneath it. Text is dark on the colored fill.
+ * optional area value + floor line beneath it. Text is dark on the colored fill.
  */
-export default function BubbleLabel({ label, radius, value }: Props) {
+export default function BubbleLabel({ label, radius, value, floor }: Props) {
   const hasValue = typeof value === "number" && isFinite(value);
-  const reserve = hasValue ? Math.max(12, radius * 0.34) : 0;
+  const hasFloor = !!floor && radius >= 34;
+  // Reserve space for whichever sub-lines we'll show.
+  const subLines = (hasValue ? 1 : 0) + (hasFloor ? 1 : 0);
+  const reserve = subLines > 0 ? Math.max(12, radius * 0.3 * subLines) : 0;
 
   const fit = useMemo(
     () => fitBubbleLabel(label || "(blank)", radius, reserve),
@@ -57,7 +61,20 @@ export default function BubbleLabel({ label, radius, value }: Props) {
           width={radius * 2}
           offsetX={radius}
           // Place the value line in the lower portion of the circle.
-          y={radius * 0.42}
+          y={radius * (hasFloor ? 0.34 : 0.42)}
+          align="center"
+          listening={false}
+        />
+      )}
+      {hasFloor && (
+        <Text
+          text={floor!}
+          fontSize={Math.max(8, Math.min(11, radius * 0.18))}
+          fontFamily="ui-sans-serif, system-ui, sans-serif"
+          fill="#334155"
+          width={radius * 2}
+          offsetX={radius}
+          y={radius * (hasValue ? 0.6 : 0.46)}
           align="center"
           listening={false}
         />

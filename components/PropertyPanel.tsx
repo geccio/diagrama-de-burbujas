@@ -156,6 +156,22 @@ export default function PropertyPanel() {
 
       <label className="mb-3 block">
         <span className="mb-1 block text-xs text-[var(--color-muted-fg)]">
+          Floor / level (optional)
+        </span>
+        <input
+          value={bubble.floor ?? ""}
+          onChange={(e) =>
+            updateBubble(bubble.id, {
+              floor: e.target.value || undefined,
+            })
+          }
+          placeholder="e.g. Ground, P2"
+          className={inputClass}
+        />
+      </label>
+
+      <label className="mb-3 block">
+        <span className="mb-1 block text-xs text-[var(--color-muted-fg)]">
           Category
         </span>
         <select

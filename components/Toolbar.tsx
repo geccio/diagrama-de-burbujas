@@ -4,8 +4,13 @@ import { useEffect, useRef } from "react";
 import type Konva from "konva";
 import { useDiagram } from "@/store/useDiagram";
 import type { Mode } from "@/lib/types";
-import { exportStagePng, exportStagePdf } from "@/lib/exportImage";
+import {
+  exportSheetPng,
+  exportSheetPdf,
+  type SheetMeta,
+} from "@/lib/exportImage";
 import { exportProject, importProject } from "@/lib/projectFile";
+import { CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
 import {
   IconBubbles,
   IconCursor,
@@ -23,10 +28,15 @@ import {
   IconRedo,
   IconSave,
   IconFolderOpen,
+  IconCalibrate,
+  IconMatrix,
+  IconSparkles,
 } from "@/components/icons";
 
 interface Props {
   onUploadClick: () => void;
+  onMatrixClick: () => void;
+  onAiClick: () => void;
   stageRef: React.RefObject<Konva.Stage | null>;
 }
 
@@ -54,7 +64,12 @@ const MODES: {
 const iconBtn =
   "flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)] disabled:cursor-not-allowed disabled:opacity-40";
 
-export default function Toolbar({ onUploadClick, stageRef }: Props) {
+export default function Toolbar({
+  onUploadClick,
+  onMatrixClick,
+  onAiClick,
+  stageRef,
+}: Props) {
   const mode = useDiagram((s) => s.mode);
   const setMode = useDiagram((s) => s.setMode);
   const ppm = useDiagram((s) => s.diagram.pixelsPerMeter);
@@ -71,6 +86,7 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
   const redo = useDiagram((s) => s.redo);
   const canUndo = useDiagram((s) => s.canUndo);
   const canRedo = useDiagram((s) => s.canRedo);
+  const startCalibration = useDiagram((s) => s.startCalibration);
   const diagram = useDiagram((s) => s.diagram);
   const loadDiagramObject = useDiagram((s) => s.loadDiagramObject);
   const layer = useDiagram((s) => s.activeLayer());
@@ -107,11 +123,40 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [undo, redo]);
 
+  function buildSheetMeta(): SheetMeta {
+    const byCat = new Map<CategoryId, { area: number; count: number }>();
+    let totalArea = 0;
+    for (const b of layer.bubbles) {
+      const cat = (b.category ?? "other") as CategoryId;
+      if (!byCat.has(cat)) byCat.set(cat, { area: 0, count: 0 });
+      const e = byCat.get(cat)!;
+      e.count += 1;
+      if (typeof b.value === "number" && isFinite(b.value) && b.value > 0) {
+        e.area += b.value;
+        totalArea += b.value;
+      }
+    }
+    return {
+      title: "Bubble Diagram",
+      date: new Date().toLocaleDateString(),
+      layerName: layer.name,
+      theme,
+      totalArea,
+      bubbleCount: layer.bubbles.length,
+      categories: CATEGORY_ORDER.filter((c) => byCat.has(c)).map((c) => ({
+        id: c,
+        ...byCat.get(c)!,
+      })),
+      hasConnections: layer.links.length > 0,
+    };
+  }
+
   function handleExport(kind: "png" | "pdf") {
     const stage = stageRef.current;
     if (!stage) return;
-    if (kind === "png") exportStagePng(stage);
-    else exportStagePdf(stage);
+    const meta = buildSheetMeta();
+    if (kind === "png") exportSheetPng(stage, meta);
+    else exportSheetPdf(stage, meta);
   }
 
   function handleSaveProject() {
@@ -191,6 +236,14 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
         <IconUpload size={16} />
         <span className="hidden sm:inline">Upload data</span>
       </button>
+      <button
+        onClick={onAiClick}
+        title="AI assistant (Ollama): generate a program or suggest connections"
+        className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm font-medium text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)]"
+      >
+        <IconSparkles size={16} />
+        <span className="hidden sm:inline">AI</span>
+      </button>
 
       {/* Layout group: arrange + fit */}
       <button
@@ -220,6 +273,15 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
       >
         <IconEraser size={16} />
       </button>
+      <button
+        onClick={onMatrixClick}
+        disabled={!hasBubbles}
+        title="View adjacency matrix"
+        aria-label="Adjacency matrix"
+        className={iconBtn}
+      >
+        <IconMatrix size={16} />
+      </button>
 
       <div className="h-6 w-px bg-[var(--color-border)]" />
 
@@ -236,6 +298,14 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
         />
         <span className="font-mono-accent text-xs">px/m</span>
       </label>
+      <button
+        onClick={startCalibration}
+        title="Calibrate scale: draw a line of known real length"
+        aria-label="Calibrate scale"
+        className={iconBtn}
+      >
+        <IconCalibrate size={16} />
+      </button>
 
       <div className="h-6 w-px bg-[var(--color-border)]" />
 

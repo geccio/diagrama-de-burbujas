@@ -10,6 +10,9 @@ import UploadPanel from "@/components/UploadPanel";
 import Legend from "@/components/Legend";
 import BackgroundPanel from "@/components/BackgroundPanel";
 import SummaryPanel from "@/components/SummaryPanel";
+import MultiSelectBar from "@/components/MultiSelectBar";
+import AdjacencyMatrix from "@/components/AdjacencyMatrix";
+import AiPanel from "@/components/AiPanel";
 import { IconBubbles, IconUpload } from "@/components/icons";
 import { useDiagram } from "@/store/useDiagram";
 
@@ -22,6 +25,8 @@ export default function Page() {
   const theme = useDiagram((s) => s.diagram.theme ?? "light");
 
   const [showUpload, setShowUpload] = useState(false);
+  const [showMatrix, setShowMatrix] = useState(false);
+  const [showAi, setShowAi] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
   const stageRef = useRef<Konva.Stage | null>(null);
   const canvasWrap = useRef<HTMLDivElement>(null);
@@ -53,7 +58,12 @@ export default function Page() {
 
   return (
     <div className="flex h-screen w-screen flex-col">
-      <Toolbar onUploadClick={() => setShowUpload(true)} stageRef={stageRef} />
+      <Toolbar
+        onUploadClick={() => setShowUpload(true)}
+        onMatrixClick={() => setShowMatrix(true)}
+        onAiClick={() => setShowAi(true)}
+        stageRef={stageRef}
+      />
       <Tabs />
 
       <div ref={canvasWrap} className="relative flex-1 overflow-hidden">
@@ -61,6 +71,7 @@ export default function Page() {
           <Canvas ref={stageRef} width={size.width} height={size.height} />
         )}
         {hydrated && <PropertyPanel />}
+        {hydrated && <MultiSelectBar />}
         {hydrated && <SummaryPanel />}
         {hydrated && <Legend />}
         {hydrated && size.width > 0 && <BackgroundPanel />}
@@ -74,6 +85,10 @@ export default function Page() {
           onClose={() => setShowUpload(false)}
           canvasSize={size}
         />
+      )}
+      {showMatrix && <AdjacencyMatrix onClose={() => setShowMatrix(false)} />}
+      {showAi && (
+        <AiPanel onClose={() => setShowAi(false)} canvasSize={size} />
       )}
     </div>
   );

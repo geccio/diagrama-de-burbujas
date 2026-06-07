@@ -28,6 +28,15 @@ Fully client-side — your data never leaves your browser.
 - **Area totals panel** — live total m² per category, per layer, with % bars.
 - **Background floor plan** — upload a plan image per layer with opacity + lock,
   and trace/measure over it.
+- **Scale calibration** — draw a line of known real length to set an accurate
+  pixels-per-meter scale (great with a floor-plan image).
+- **Multi-select** — Shift+drag a box to select many bubbles, then bulk
+  recategorize / recolor / delete.
+- **Adjacency matrix** — auto-generated grid of which spaces connect.
+- **Rich export** — PNG/PDF sheet with a title block, legend, and area totals.
+- **AI assistant (Ollama, local)** — bring your own local model to: generate a
+  program from a plain-language brief, suggest adjacencies on existing bubbles,
+  and auto-map messy spreadsheet/PDF columns to name / area / category / floor.
 - **Undo / Redo** — Ctrl+Z / Ctrl+Shift+Z across all edits.
 - **Save / Load project files** — export the whole diagram (incl. images) to a
   portable `.json` and reopen it anywhere.

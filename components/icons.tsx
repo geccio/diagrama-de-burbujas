@@ -146,6 +146,26 @@ export function IconBubbles(props: IconProps) {
   );
 }
 
+/** Sparkles (AI). */
+export function IconSparkles(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z" />
+      <path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z" />
+    </svg>
+  );
+}
+
+/** Grid / matrix table. */
+export function IconMatrix(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+    </svg>
+  );
+}
+
 /** Undo (curved arrow left). */
 export function IconUndo(props: IconProps) {
   return (
@@ -184,6 +204,16 @@ export function IconEraser(props: IconProps) {
     <svg {...svgProps(props)} aria-hidden="true">
       <path d="m7 21-4-4a2 2 0 0 1 0-2.8L13.5 3.7a2 2 0 0 1 2.8 0l4 4a2 2 0 0 1 0 2.8L11 20" />
       <path d="M22 21H7M5 12l6 6" />
+    </svg>
+  );
+}
+
+/** Calibrate / target (set scale from known length). */
+export function IconCalibrate(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
     </svg>
   );
 }

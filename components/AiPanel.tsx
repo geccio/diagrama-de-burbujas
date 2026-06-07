@@ -1,0 +1,257 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useDiagram } from "@/store/useDiagram";
+import {
+  loadOllamaSettings,
+  saveOllamaSettings,
+  listModels,
+  describeOllamaError,
+  type OllamaSettings,
+} from "@/lib/ollama";
+import {
+  aiGenerateProgram,
+  aiSuggestAdjacencies,
+  normalizeCategory,
+} from "@/lib/aiTasks";
+import { IconX, IconWarning } from "@/components/icons";
+
+interface Props {
+  onClose: () => void;
+  canvasSize: { width: number; height: number };
+}
+
+type Status =
+  | { kind: "idle" }
+  | { kind: "busy"; msg: string }
+  | { kind: "error"; msg: string }
+  | { kind: "ok"; msg: string };
+
+export default function AiPanel({ onClose, canvasSize }: Props) {
+  const layer = useDiagram((s) => s.activeLayer());
+  const addSpaces = useDiagram((s) => s.addSpaces);
+  const addLinksByNames = useDiagram((s) => s.addLinksByNames);
+
+  const [settings, setSettings] = useState<OllamaSettings>(loadOllamaSettings());
+  const [models, setModels] = useState<string[]>([]);
+  const [brief, setBrief] = useState("");
+  const [status, setStatus] = useState<Status>({ kind: "idle" });
+
+  useEffect(() => {
+    saveOllamaSettings(settings);
+  }, [settings]);
+
+  async function testConnection() {
+    setStatus({ kind: "busy", msg: "Connecting to Ollama…" });
+    try {
+      const list = await listModels(settings);
+      setModels(list);
+      setStatus({
+        kind: "ok",
+        msg: list.length
+          ? `Connected. ${list.length} model(s) available.`
+          : "Connected, but no models installed (run `ollama pull llama3.1`).",
+      });
+    } catch (e) {
+      setStatus({ kind: "error", msg: describeOllamaError(e) });
+    }
+  }
+
+  async function handleGenerate() {
+    if (!brief.trim()) return;
+    setStatus({ kind: "busy", msg: "Generating program…" });
+    try {
+      const spaces = await aiGenerateProgram(settings, brief.trim());
+      if (spaces.length === 0) {
+        setStatus({ kind: "error", msg: "The model returned no spaces." });
+        return;
+      }
+      addSpaces(
+        spaces.map((s) => ({
+          name: s.name,
+          area: typeof s.area === "number" ? s.area : undefined,
+          category: normalizeCategory(s.category),
+          floor: s.floor,
+        })),
+        "replace",
+        canvasSize
+      );
+      setStatus({ kind: "ok", msg: `Created ${spaces.length} spaces.` });
+    } catch (e) {
+      setStatus({ kind: "error", msg: describeOllamaError(e) });
+    }
+  }
+
+  async function handleSuggestAdjacencies() {
+    const names = layer.bubbles.map((b) => b.label);
+    if (names.length < 2) {
+      setStatus({
+        kind: "error",
+        msg: "Add at least two bubbles first.",
+      });
+      return;
+    }
+    setStatus({ kind: "busy", msg: "Suggesting adjacencies…" });
+    try {
+      const adj = await aiSuggestAdjacencies(settings, names);
+      addLinksByNames(adj);
+      setStatus({
+        kind: "ok",
+        msg: `Added ${adj.length} suggested connection(s).`,
+      });
+    } catch (e) {
+      setStatus({ kind: "error", msg: describeOllamaError(e) });
+    }
+  }
+
+  const busy = status.kind === "busy";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="AI assistant"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">AI assistant (Ollama)</h2>
+            <p className="text-xs text-[var(--color-muted-fg)]">
+              Runs on your own machine. Nothing leaves your computer.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="cursor-pointer rounded-lg p-1.5 text-[var(--color-muted-fg)] transition-colors duration-150 hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]"
+          >
+            <IconX size={18} />
+          </button>
+        </div>
+
+        {/* Connection settings */}
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-muted-fg)]">
+              Ollama endpoint
+            </span>
+            <input
+              value={settings.endpoint}
+              onChange={(e) =>
+                setSettings((s) => ({ ...s, endpoint: e.target.value }))
+              }
+              placeholder="http://localhost:11434"
+              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] focus:border-[var(--color-ring)]"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs text-[var(--color-muted-fg)]">
+              Model
+            </span>
+            {models.length > 0 ? (
+              <select
+                value={settings.model}
+                onChange={(e) =>
+                  setSettings((s) => ({ ...s, model: e.target.value }))
+                }
+                className="w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] focus:border-[var(--color-ring)]"
+              >
+                {models.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                value={settings.model}
+                onChange={(e) =>
+                  setSettings((s) => ({ ...s, model: e.target.value }))
+                }
+                placeholder="llama3.1"
+                className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] focus:border-[var(--color-ring)]"
+              />
+            )}
+          </label>
+        </div>
+
+        <button
+          onClick={testConnection}
+          disabled={busy}
+          className="mb-4 cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)] disabled:opacity-50"
+        >
+          Test connection
+        </button>
+
+        {/* Generate program */}
+        <div className="mb-4 rounded-xl border border-[var(--color-border)] p-3">
+          <h3 className="mb-1 text-sm font-medium">Generate a program</h3>
+          <p className="mb-2 text-xs text-[var(--color-muted-fg)]">
+            Describe the building; the AI creates bubbles with area, category &
+            floor. Replaces the current layer.
+          </p>
+          <textarea
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            rows={3}
+            placeholder="e.g. A 3-floor coworking, ~600 m² total, with lobby, cafe, 4 meeting rooms, phone booths, bathrooms per floor, server room, and parking in the basement."
+            className="mb-2 w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] focus:border-[var(--color-ring)]"
+          />
+          <button
+            onClick={handleGenerate}
+            disabled={busy || !brief.trim()}
+            className="cursor-pointer rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-primary)] transition-colors duration-150 hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+          >
+            Generate
+          </button>
+        </div>
+
+        {/* Suggest adjacencies */}
+        <div className="mb-4 rounded-xl border border-[var(--color-border)] p-3">
+          <h3 className="mb-1 text-sm font-medium">Suggest adjacencies</h3>
+          <p className="mb-2 text-xs text-[var(--color-muted-fg)]">
+            Looks at the {layer.bubbles.length} bubbles on this layer and adds
+            suggested connections (solid = strong, dashed = optional).
+          </p>
+          <button
+            onClick={handleSuggestAdjacencies}
+            disabled={busy || layer.bubbles.length < 2}
+            className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)] disabled:opacity-50"
+          >
+            Suggest connections
+          </button>
+        </div>
+
+        {/* Status */}
+        {status.kind !== "idle" && (
+          <div
+            className={`flex items-start gap-2 rounded-lg p-3 text-sm ${
+              status.kind === "error"
+                ? "bg-[rgba(220,38,38,0.15)] text-red-300"
+                : status.kind === "ok"
+                ? "bg-[rgba(16,185,129,0.15)] text-emerald-300"
+                : "bg-[var(--color-surface-2)] text-[var(--color-muted-fg)]"
+            }`}
+          >
+            {status.kind === "error" && (
+              <IconWarning size={16} className="mt-0.5 shrink-0" />
+            )}
+            <span>{status.msg}</span>
+          </div>
+        )}
+
+        <p className="mt-3 text-[11px] leading-tight text-[var(--color-muted-fg)]">
+          Tip: start Ollama allowing this site, e.g.{" "}
+          <code className="font-mono-accent">
+            OLLAMA_ORIGINS=&quot;*&quot; ollama serve
+          </code>
+          . Smart import mapping is available in the Upload dialog.
+        </p>
+      </div>
+    </div>
+  );
+}

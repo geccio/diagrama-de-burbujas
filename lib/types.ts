@@ -36,12 +36,26 @@ export interface Drawing {
   lengthMeters: number;
 }
 
+/** Optional background floor-plan image for a layer. */
+export interface Background {
+  /** Data URL (base64) of the image so it persists with the diagram. */
+  src: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  opacity: number;
+  /** When locked, the image can't be moved/resized by dragging. */
+  locked: boolean;
+}
+
 export interface Layer {
   id: string;
   name: string;
   bubbles: Bubble[];
   links: Link[];
   drawings: Drawing[];
+  background?: Background;
 }
 
 export interface Diagram {

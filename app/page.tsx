@@ -8,6 +8,8 @@ import Tabs from "@/components/Tabs";
 import PropertyPanel from "@/components/PropertyPanel";
 import UploadPanel from "@/components/UploadPanel";
 import Legend from "@/components/Legend";
+import BackgroundPanel from "@/components/BackgroundPanel";
+import SummaryPanel from "@/components/SummaryPanel";
 import { IconBubbles, IconUpload } from "@/components/icons";
 import { useDiagram } from "@/store/useDiagram";
 
@@ -59,7 +61,9 @@ export default function Page() {
           <Canvas ref={stageRef} width={size.width} height={size.height} />
         )}
         {hydrated && <PropertyPanel />}
+        {hydrated && <SummaryPanel />}
         {hydrated && <Legend />}
+        {hydrated && size.width > 0 && <BackgroundPanel />}
 
         {/* Empty-state hint */}
         {hydrated && <EmptyHint onUploadClick={() => setShowUpload(true)} />}

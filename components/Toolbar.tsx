@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type Konva from "konva";
 import { useDiagram } from "@/store/useDiagram";
 import type { Mode } from "@/lib/types";
 import { exportStagePng, exportStagePdf } from "@/lib/exportImage";
+import { exportProject, importProject } from "@/lib/projectFile";
 import {
   IconBubbles,
   IconCursor,
@@ -17,6 +19,10 @@ import {
   IconArrange,
   IconEraser,
   IconFit,
+  IconUndo,
+  IconRedo,
+  IconSave,
+  IconFolderOpen,
 } from "@/components/icons";
 
 interface Props {
@@ -61,16 +67,64 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
   const arrangeByCategory = useDiagram((s) => s.arrangeByCategory);
   const requestFit = useDiagram((s) => s.requestFit);
   const clearDrawings = useDiagram((s) => s.clearDrawings);
+  const undo = useDiagram((s) => s.undo);
+  const redo = useDiagram((s) => s.redo);
+  const canUndo = useDiagram((s) => s.canUndo);
+  const canRedo = useDiagram((s) => s.canRedo);
+  const diagram = useDiagram((s) => s.diagram);
+  const loadDiagramObject = useDiagram((s) => s.loadDiagramObject);
   const layer = useDiagram((s) => s.activeLayer());
+  const openInput = useRef<HTMLInputElement>(null);
 
   const hasBubbles = layer.bubbles.length > 0;
   const hasDrawings = layer.drawings.length > 0;
+
+  // Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      // Don't hijack typing in inputs.
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((key === "z" && e.shiftKey) || key === "y") {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
 
   function handleExport(kind: "png" | "pdf") {
     const stage = stageRef.current;
     if (!stage) return;
     if (kind === "png") exportStagePng(stage);
     else exportStagePdf(stage);
+  }
+
+  function handleSaveProject() {
+    exportProject(diagram, new Date().toISOString());
+  }
+
+  async function handleOpenProject(file: File) {
+    try {
+      const loaded = await importProject(file);
+      loadDiagramObject(loaded);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not open the project file.");
+    }
   }
 
   return (
@@ -107,6 +161,26 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
           );
         })}
       </div>
+
+      {/* Undo / redo */}
+      <button
+        onClick={undo}
+        disabled={!canUndo}
+        title="Undo (Ctrl+Z)"
+        aria-label="Undo"
+        className={iconBtn}
+      >
+        <IconUndo size={16} />
+      </button>
+      <button
+        onClick={redo}
+        disabled={!canRedo}
+        title="Redo (Ctrl+Shift+Z)"
+        aria-label="Redo"
+        className={iconBtn}
+      >
+        <IconRedo size={16} />
+      </button>
 
       <div className="h-6 w-px bg-[var(--color-border)]" />
 
@@ -162,6 +236,37 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
         />
         <span className="font-mono-accent text-xs">px/m</span>
       </label>
+
+      <div className="h-6 w-px bg-[var(--color-border)]" />
+
+      {/* Project file: save / open */}
+      <button
+        onClick={handleSaveProject}
+        title="Save project to a .json file"
+        aria-label="Save project"
+        className={iconBtn}
+      >
+        <IconSave size={16} />
+      </button>
+      <button
+        onClick={() => openInput.current?.click()}
+        title="Open a .json project file"
+        aria-label="Open project"
+        className={iconBtn}
+      >
+        <IconFolderOpen size={16} />
+      </button>
+      <input
+        ref={openInput}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) handleOpenProject(f);
+          e.target.value = "";
+        }}
+      />
 
       <div className="h-6 w-px bg-[var(--color-border)]" />
 

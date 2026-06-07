@@ -36,6 +36,9 @@ interface UIState {
   saving: boolean;
   /** Incremented to ask the Canvas to zoom-to-fit all content. */
   fitRequest: number;
+  /** Undo/redo availability (counts) for the UI. */
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 interface DiagramState extends UIState {
@@ -45,6 +48,7 @@ interface DiagramState extends UIState {
   // lifecycle
   hydrate: () => void;
   resetAll: () => void;
+  loadDiagramObject: (diagram: Diagram) => void;
 
   // ui
   setMode: (mode: Mode) => void;
@@ -87,9 +91,21 @@ interface DiagramState extends UIState {
   deleteDrawing: (id: string) => void;
   clearDrawings: () => void;
 
+  // background image (per active layer)
+  setBackground: (src: string, naturalW: number, naturalH: number) => void;
+  updateBackground: (
+    patch: Partial<import("@/lib/types").Background>
+  ) => void;
+  removeBackground: () => void;
+
   // layout
   arrangeByCategory: () => void;
   requestFit: () => void;
+
+  // undo / redo
+  pushHistory: () => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 /** Persist the diagram to localStorage (debounced). */
@@ -103,6 +119,37 @@ function persist(diagram: Diagram, set: (p: Partial<DiagramState>) => void) {
   }, 400);
 }
 
+// --- Undo / redo history (module-level stacks; not part of persisted state) ---
+const MAX_HISTORY = 60;
+let undoStack: Diagram[] = [];
+let redoStack: Diagram[] = [];
+
+function clone(d: Diagram): Diagram {
+  return JSON.parse(JSON.stringify(d));
+}
+
+/**
+ * Record `prev` (state before the change), persist `next`, and clear the redo
+ * stack. Used by every mutating action so undo/redo "just works".
+ */
+function commit(
+  prev: Diagram,
+  next: Diagram,
+  set: (p: Partial<DiagramState>) => void
+) {
+  undoStack.push(clone(prev));
+  if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  redoStack = [];
+  set({ canUndo: undoStack.length > 0, canRedo: false });
+  persist(next, set);
+}
+
+function resetHistory(set: (p: Partial<DiagramState>) => void) {
+  undoStack = [];
+  redoStack = [];
+  set({ canUndo: false, canRedo: false });
+}
+
 export const useDiagram = create<DiagramState>((set, get) => ({
   diagram: freshDiagram(),
   hydrated: false,
@@ -112,9 +159,12 @@ export const useDiagram = create<DiagramState>((set, get) => ({
   pendingConnectId: null,
   saving: false,
   fitRequest: 0,
+  canUndo: false,
+  canRedo: false,
 
   hydrate: () => {
     const stored = loadDiagram();
+    resetHistory(set);
     if (stored) {
       set({ diagram: stored, hydrated: true });
     } else {
@@ -124,6 +174,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
 
   resetAll: () => {
     clearDiagram();
+    resetHistory(set);
     set({
       diagram: freshDiagram(),
       selectedBubbleId: null,
@@ -131,6 +182,19 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       pendingConnectId: null,
       mode: "select",
     });
+  },
+
+  loadDiagramObject: (diagram) => {
+    resetHistory(set);
+    set({
+      diagram,
+      selectedBubbleId: null,
+      selectedLinkId: null,
+      pendingConnectId: null,
+      mode: "select",
+    });
+    persist(diagram, set);
+    set((s) => ({ fitRequest: s.fitRequest + 1 }));
   },
 
   setMode: (mode) =>
@@ -161,7 +225,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       activeLayerId: layer.id,
     };
     set({ diagram: next, selectedBubbleId: null, selectedLinkId: null });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   renameLayer: (id, name) => {
@@ -171,7 +235,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       layers: diagram.layers.map((l) => (l.id === id ? { ...l, name } : l)),
     };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   deleteLayer: (id) => {
@@ -182,7 +246,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       diagram.activeLayerId === id ? layers[0].id : diagram.activeLayerId;
     const next: Diagram = { ...diagram, layers, activeLayerId };
     set({ diagram: next, selectedBubbleId: null, selectedLinkId: null });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   setActiveLayer: (id) => {
@@ -259,7 +323,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
 
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
     // Frame the new content.
     set((s) => ({ fitRequest: s.fitRequest + 1 }));
   },
@@ -283,7 +347,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next, selectedBubbleId: bubble.id });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   moveBubble: (id, x, y) => {
@@ -315,7 +379,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   setBubbleCategory: (id, category) => {
@@ -334,7 +398,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   deleteBubble: (id) => {
@@ -352,7 +416,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next, selectedBubbleId: null });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   handleBubbleConnectClick: (id) => {
@@ -385,7 +449,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       );
       const next: Diagram = { ...diagram, layers };
       set({ diagram: next, pendingConnectId: null });
-      persist(next, set);
+      commit(diagram, next, set);
     } else {
       set({ pendingConnectId: null });
     }
@@ -403,7 +467,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   deleteLink: (id) => {
@@ -415,7 +479,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next, selectedLinkId: null });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   addDrawing: (drawing) => {
@@ -427,7 +491,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   deleteDrawing: (id) => {
@@ -439,7 +503,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
   },
 
   clearDrawings: () => {
@@ -449,7 +513,53 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set);
+    commit(diagram, next, set);
+  },
+
+  setBackground: (src, naturalW, naturalH) => {
+    const { diagram } = get();
+    // Fit the image to a reasonable on-canvas size while keeping aspect ratio.
+    const maxDim = 1000;
+    const scale = Math.min(1, maxDim / Math.max(naturalW, naturalH));
+    const width = Math.round(naturalW * scale);
+    const height = Math.round(naturalH * scale);
+    const background = {
+      src,
+      x: 80,
+      y: 80,
+      width,
+      height,
+      opacity: 0.55,
+      locked: false,
+    };
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId ? { ...l, background } : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    commit(diagram, next, set);
+    set((s) => ({ fitRequest: s.fitRequest + 1 }));
+  },
+
+  updateBackground: (patch) => {
+    const { diagram } = get();
+    const layers = diagram.layers.map((l) => {
+      if (l.id !== diagram.activeLayerId || !l.background) return l;
+      return { ...l, background: { ...l.background, ...patch } };
+    });
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    persist(next, set); // opacity/move are fine-grained; keep out of history flood
+  },
+
+  removeBackground: () => {
+    const { diagram } = get();
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId ? { ...l, background: undefined } : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    commit(diagram, next, set);
   },
 
   arrangeByCategory: () => {
@@ -470,10 +580,51 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next, selectedBubbleId: null, selectedLinkId: null });
-    persist(next, set);
+    commit(diagram, next, set);
     // Re-frame the new arrangement on the next tick.
     set((s) => ({ fitRequest: s.fitRequest + 1 }));
   },
 
   requestFit: () => set((s) => ({ fitRequest: s.fitRequest + 1 })),
+
+  // --- undo / redo + drag history ---
+  pushHistory: () => {
+    const { diagram } = get();
+    undoStack.push(clone(diagram));
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack = [];
+    set({ canUndo: true, canRedo: false });
+  },
+
+  undo: () => {
+    const prev = undoStack.pop();
+    if (!prev) return;
+    const { diagram } = get();
+    redoStack.push(clone(diagram));
+    set({
+      diagram: prev,
+      selectedBubbleId: null,
+      selectedLinkId: null,
+      pendingConnectId: null,
+      canUndo: undoStack.length > 0,
+      canRedo: true,
+    });
+    persist(prev, set);
+  },
+
+  redo: () => {
+    const next = redoStack.pop();
+    if (!next) return;
+    const { diagram } = get();
+    undoStack.push(clone(diagram));
+    set({
+      diagram: next,
+      selectedBubbleId: null,
+      selectedLinkId: null,
+      pendingConnectId: null,
+      canUndo: true,
+      canRedo: redoStack.length > 0,
+    });
+    persist(next, set);
+  },
 }));

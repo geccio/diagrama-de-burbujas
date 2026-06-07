@@ -21,6 +21,16 @@ Fully client-side — your data never leaves your browser.
   segment and the total report length in **meters** using an editable
   pixels-per-meter scale.
 - **Select mode** — drag bubbles, rename, recolor, resize, edit area, delete.
+- **Categories** — bubbles auto-categorized (Service Core / Public / Services /
+  Infrastructure) and color-coded; override per bubble. Legend included.
+- **Auto-arrange** — cluster bubbles into clean columns by category; zoom-to-fit.
+- **Connections** — solid (sure/direct) and dashed (intermittent/uncertain) links.
+- **Area totals panel** — live total m² per category, per layer, with % bars.
+- **Background floor plan** — upload a plan image per layer with opacity + lock,
+  and trace/measure over it.
+- **Undo / Redo** — Ctrl+Z / Ctrl+Shift+Z across all edits.
+- **Save / Load project files** — export the whole diagram (incl. images) to a
+  portable `.json` and reopen it anywhere.
 - **Pan & zoom** — drag empty canvas to pan, scroll to zoom.
 - **Auto-save** — everything persists to your browser (localStorage).
 - **Export** — download the current view as **PNG** or **PDF**.

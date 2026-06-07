@@ -9,10 +9,11 @@ import {
   Line,
   Group,
   Rect,
+  Image as KonvaImage,
 } from "react-konva";
 import type Konva from "konva";
 import { useDiagram } from "@/store/useDiagram";
-import type { Bubble } from "@/lib/types";
+import type { Bubble, Background } from "@/lib/types";
 import { uid } from "@/lib/id";
 import BubbleLabel from "@/components/BubbleLabel";
 import { canvasColors } from "@/lib/themeColors";
@@ -48,7 +49,10 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   const moveBubble = useDiagram((s) => s.moveBubble);
   const handleBubbleConnectClick = useDiagram((s) => s.handleBubbleConnectClick);
   const addDrawing = useDiagram((s) => s.addDrawing);
+  const pushHistory = useDiagram((s) => s.pushHistory);
+  const updateBackground = useDiagram((s) => s.updateBackground);
   const fitRequest = useDiagram((s) => s.fitRequest);
+  const background = layer.background;
 
   // pan/zoom state
   const [scale, setScale] = useState(1);
@@ -277,6 +281,18 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
         ))}
       </KonvaLayer>
 
+      {/* Background floor-plan image (under bubbles) */}
+      {background && (
+        <KonvaLayer>
+          <BackgroundImage
+            bg={background}
+            draggable={mode === "select" && !background.locked}
+            onChange={(patch) => updateBackground(patch)}
+            onDragStart={pushHistory}
+          />
+        </KonvaLayer>
+      )}
+
       {/* Links (drawn beneath bubbles) */}
       <KonvaLayer>
         {layer.links.map((link) => {
@@ -317,6 +333,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
               x={b.x}
               y={b.y}
               draggable={mode === "select"}
+              onDragStart={() => pushHistory()}
               onDragMove={(e) => {
                 // live-update so links follow during drag
                 moveBubble(b.id, e.target.x(), e.target.y());
@@ -472,6 +489,58 @@ function segmentLabels(
     });
   }
   return labels;
+}
+
+// --- background floor-plan image ---
+
+function BackgroundImage({
+  bg,
+  draggable,
+  onChange,
+  onDragStart,
+}: {
+  bg: Background;
+  draggable: boolean;
+  onChange: (patch: Partial<Background>) => void;
+  onDragStart: () => void;
+}) {
+  const [img, setImg] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const image = new window.Image();
+    image.src = bg.src;
+    image.onload = () => setImg(image);
+    return () => {
+      image.onload = null;
+    };
+  }, [bg.src]);
+
+  if (!img) return null;
+
+  return (
+    <KonvaImage
+      image={img}
+      x={bg.x}
+      y={bg.y}
+      width={bg.width}
+      height={bg.height}
+      opacity={bg.opacity}
+      draggable={draggable}
+      onDragStart={() => draggable && onDragStart()}
+      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
+      // Subtle cursor hint when movable.
+      onMouseEnter={(e) => {
+        if (draggable) {
+          const stage = e.target.getStage();
+          if (stage) stage.container().style.cursor = "move";
+        }
+      }}
+      onMouseLeave={(e) => {
+        const stage = e.target.getStage();
+        if (stage) stage.container().style.cursor = "default";
+      }}
+    />
+  );
 }
 
 // --- tooltip ---

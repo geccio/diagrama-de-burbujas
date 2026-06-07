@@ -107,6 +107,25 @@ export function IconReset(props: IconProps) {
   );
 }
 
+/** Save to disk (floppy). */
+export function IconSave(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z" />
+      <path d="M17 21v-8H7v8M7 3v5h8" />
+    </svg>
+  );
+}
+
+/** Open folder. */
+export function IconFolderOpen(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="M6 14l1.5-3.5A2 2 0 0 1 9.3 9H20a1 1 0 0 1 1 1.2l-1.3 6A2 2 0 0 1 17.8 18H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.7.9l.8 1.2a2 2 0 0 0 1.7.9H18a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
 /** File spreadsheet (upload empty state / dialog). */
 export function IconSpreadsheet(props: IconProps) {
   return (
@@ -123,6 +142,26 @@ export function IconBubbles(props: IconProps) {
     <svg {...svgProps(props)} aria-hidden="true">
       <circle cx="9" cy="13" r="6" />
       <circle cx="17" cy="8" r="3.5" />
+    </svg>
+  );
+}
+
+/** Undo (curved arrow left). */
+export function IconUndo(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h11a6 6 0 0 1 0 12h-3" />
+    </svg>
+  );
+}
+
+/** Redo (curved arrow right). */
+export function IconRedo(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="m15 14 5-5-5-5" />
+      <path d="M20 9H9a6 6 0 0 0 0 12h3" />
     </svg>
   );
 }
@@ -173,6 +212,37 @@ export function IconMoon(props: IconProps) {
   return (
     <svg {...svgProps(props)} aria-hidden="true">
       <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
+    </svg>
+  );
+}
+
+/** Image / picture. */
+export function IconImage(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="9" cy="9" r="2" />
+      <path d="m21 15-4.5-4.5L5 21" />
+    </svg>
+  );
+}
+
+/** Lock (closed). */
+export function IconLock(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
+/** Lock (open). */
+export function IconUnlock(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 7.9-1" />
     </svg>
   );
 }

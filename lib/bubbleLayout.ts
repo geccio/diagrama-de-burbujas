@@ -1,20 +1,26 @@
 // Helpers for sizing and laying out newly created bubbles.
 
-const MIN_RADIUS = 28;
-const MAX_RADIUS = 95;
+const MIN_RADIUS = 26;
+const MAX_RADIUS = 120;
 const DEFAULT_RADIUS = 45;
 
+// Reference: a bubble of REFERENCE_AREA m² is drawn at REFERENCE_RADIUS px.
+// Area is strictly proportional to the value (radius ∝ √value), so a 12 m²
+// bubble has exactly 12× the on-screen area of a 1 m² bubble.
+const REFERENCE_AREA = 20; // m²
+const REFERENCE_RADIUS = 55; // px
+
 const PALETTE = [
-  "#60a5fa", // blue
-  "#34d399", // green
-  "#fbbf24", // amber
-  "#f87171", // red
-  "#a78bfa", // violet
-  "#f472b6", // pink
-  "#22d3ee", // cyan
-  "#fb923c", // orange
-  "#a3e635", // lime
-  "#c084fc", // purple
+  "#60a5fa",
+  "#34d399",
+  "#fbbf24",
+  "#f87171",
+  "#a78bfa",
+  "#f472b6",
+  "#22d3ee",
+  "#fb923c",
+  "#a3e635",
+  "#c084fc",
 ];
 
 export function colorForIndex(i: number): string {
@@ -22,32 +28,28 @@ export function colorForIndex(i: number): string {
 }
 
 /**
- * Map an array of optional numeric values to radii where bubble *area* is
- * proportional to the value (so radius ∝ √value), clamped to a sane range.
- * Returns DEFAULT_RADIUS for missing / non-numeric values.
+ * Radius for a single area value such that circle AREA is proportional to the
+ * value. radius = REFERENCE_RADIUS * sqrt(value / REFERENCE_AREA), clamped.
  */
-export function radiiFromValues(values: (number | undefined)[]): number[] {
-  const valid = values.filter(
-    (v): v is number => typeof v === "number" && isFinite(v) && v > 0
-  );
-  if (valid.length === 0) {
-    return values.map(() => DEFAULT_RADIUS);
+export function radiusForValue(value: number | undefined): number {
+  if (typeof value !== "number" || !isFinite(value) || value <= 0) {
+    return DEFAULT_RADIUS;
   }
-  const min = Math.min(...valid);
-  const max = Math.max(...valid);
-
-  return values.map((v) => {
-    if (typeof v !== "number" || !isFinite(v) || v <= 0) return DEFAULT_RADIUS;
-    if (max === min) return DEFAULT_RADIUS;
-    // Normalize on sqrt so area scales linearly with value.
-    const t = (Math.sqrt(v) - Math.sqrt(min)) / (Math.sqrt(max) - Math.sqrt(min));
-    return MIN_RADIUS + t * (MAX_RADIUS - MIN_RADIUS);
-  });
+  const r = REFERENCE_RADIUS * Math.sqrt(value / REFERENCE_AREA);
+  return Math.max(MIN_RADIUS, Math.min(MAX_RADIUS, r));
 }
 
 /**
- * Lay out N bubbles in a simple grid that fills the visible area, leaving
- * room around each based on the largest radius so they don't overlap on spawn.
+ * Map an array of optional area values to radii with area strictly
+ * proportional to the value. Missing/non-numeric → DEFAULT_RADIUS.
+ */
+export function radiiFromValues(values: (number | undefined)[]): number[] {
+  return values.map(radiusForValue);
+}
+
+/**
+ * Lay out N bubbles in a grid that fills the visible area, spacing cells by the
+ * largest radius so bubbles don't overlap on spawn.
  */
 export function gridPositions(
   count: number,
@@ -71,4 +73,10 @@ export function gridPositions(
   });
 }
 
-export { DEFAULT_RADIUS, MIN_RADIUS, MAX_RADIUS };
+export {
+  DEFAULT_RADIUS,
+  MIN_RADIUS,
+  MAX_RADIUS,
+  REFERENCE_AREA,
+  REFERENCE_RADIUS,
+};

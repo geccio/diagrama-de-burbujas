@@ -15,6 +15,8 @@ import { useDiagram } from "@/store/useDiagram";
 import type { Bubble } from "@/lib/types";
 import { uid } from "@/lib/id";
 import BubbleLabel from "@/components/BubbleLabel";
+import { canvasColors } from "@/lib/themeColors";
+import { CATEGORIES, type CategoryId } from "@/lib/categories";
 
 interface Props {
   width: number;
@@ -35,6 +37,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   const layer = useDiagram((s) => s.activeLayer());
   const mode = useDiagram((s) => s.mode);
   const ppm = diagram.pixelsPerMeter;
+  const colors = canvasColors(diagram.theme);
 
   const selectedBubbleId = useDiagram((s) => s.selectedBubbleId);
   const selectedLinkId = useDiagram((s) => s.selectedLinkId);
@@ -53,6 +56,9 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   // in-progress measure line
   const [draft, setDraft] = useState<DraftLine | null>(null);
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+
+  // hovered bubble (for tooltip)
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   const internalRef = useRef<Konva.Stage | null>(null);
   function setStageRef(node: Konva.Stage | null) {
@@ -209,7 +215,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
         }
       }}
       style={{
-        background: "#0f172a",
+        background: colors.bg,
         cursor: mode === "draw" ? "crosshair" : "default",
       }}
     >
@@ -220,10 +226,15 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
           y={-pos.y / scale}
           width={width / scale}
           height={height / scale}
-          fill="#0f172a"
+          fill={colors.bg}
         />
         {gridLines.map((l, i) => (
-          <Line key={i} points={l} stroke="#1e293b" strokeWidth={1 / scale} />
+          <Line
+            key={i}
+            points={l}
+            stroke={colors.grid}
+            strokeWidth={1 / scale}
+          />
         ))}
       </KonvaLayer>
 
@@ -238,7 +249,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
             <Line
               key={link.id}
               points={[a.x, a.y, b.x, b.y]}
-              stroke={selected ? "#f87171" : "#64748b"}
+              stroke={selected ? "#ef4444" : colors.link}
               strokeWidth={selected ? 4 : 2.5}
               hitStrokeWidth={14}
               onClick={(e) => {
@@ -277,18 +288,26 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
                 e.cancelBubble = true;
                 onBubbleClick(b);
               }}
+              onMouseEnter={() => setHoverId(b.id)}
+              onMouseLeave={() => setHoverId((id) => (id === b.id ? null : id))}
             >
               <Circle
                 radius={b.radius}
                 fill={b.color}
-                opacity={0.85}
+                opacity={isSelected || b.id === hoverId ? 0.95 : 0.85}
                 stroke={
-                  isPending ? "#fde047" : isSelected ? "#ffffff" : "#0b1220"
+                  isPending
+                    ? "#fde047"
+                    : isSelected
+                    ? colors.label === "#0b1220"
+                      ? "#0f172a"
+                      : "#ffffff"
+                    : "rgba(15,23,42,0.35)"
                 }
                 strokeWidth={isPending || isSelected ? 4 : 1.5}
                 shadowColor="black"
-                shadowBlur={6}
-                shadowOpacity={0.3}
+                shadowBlur={b.id === hoverId ? 12 : 6}
+                shadowOpacity={b.id === hoverId ? 0.35 : 0.2}
               />
               <BubbleLabel
                 label={b.label}
@@ -298,6 +317,25 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
             </Group>
           );
         })}
+      </KonvaLayer>
+
+      {/* Hover tooltip (full details) */}
+      <KonvaLayer listening={false}>
+        {(() => {
+          if (!hoverId) return null;
+          const b = bubbleById.get(hoverId);
+          if (!b) return null;
+          return (
+            <BubbleTooltip
+              x={b.x}
+              y={b.y - b.radius - 8}
+              label={b.label}
+              category={b.category}
+              value={b.value}
+              scale={scale}
+            />
+          );
+        })()}
       </KonvaLayer>
 
       {/* Drawings + measurements */}
@@ -393,6 +431,72 @@ function segmentLabels(
     });
   }
   return labels;
+}
+
+// --- tooltip ---
+
+function BubbleTooltip({
+  x,
+  y,
+  label,
+  category,
+  value,
+  scale,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  category?: CategoryId;
+  value?: number;
+  scale: number;
+}) {
+  const cat = category ? CATEGORIES[category] : undefined;
+  const lines = [
+    label,
+    cat ? cat.label : null,
+    typeof value === "number" ? `${value} m²` : null,
+  ].filter(Boolean) as string[];
+
+  // Counter-scale so the tooltip stays a constant on-screen size regardless of
+  // canvas zoom. Width estimated from the longest line.
+  const inv = 1 / scale;
+  const pad = 8;
+  const lineH = 16;
+  const longest = lines.reduce((m, l) => Math.max(m, l.length), 0);
+  const w = Math.min(280, Math.max(90, longest * 7 + pad * 2));
+  const h = lines.length * lineH + pad * 2;
+
+  return (
+    <Group x={x} y={y} scaleX={inv} scaleY={inv} offsetX={w / 2} offsetY={h}>
+      <Rect
+        width={w}
+        height={h}
+        cornerRadius={8}
+        fill="#0f172a"
+        opacity={0.95}
+        shadowColor="black"
+        shadowBlur={10}
+        shadowOpacity={0.4}
+      />
+      {cat && (
+        <Circle x={pad + 4} y={pad + 6} radius={4} fill={cat.color} />
+      )}
+      {lines.map((ln, i) => (
+        <Text
+          key={i}
+          text={ln}
+          x={pad + (i === 1 && cat ? 14 : 0)}
+          y={pad + i * lineH}
+          width={w - pad * 2}
+          fontSize={i === 0 ? 13 : 11}
+          fontStyle={i === 0 ? "bold" : "normal"}
+          fill={i === 0 ? "#f1f5f9" : "#94a3b8"}
+          wrap="none"
+          ellipsis
+        />
+      ))}
+    </Group>
+  );
 }
 
 export default Canvas;

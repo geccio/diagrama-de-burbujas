@@ -7,6 +7,7 @@ import Toolbar from "@/components/Toolbar";
 import Tabs from "@/components/Tabs";
 import PropertyPanel from "@/components/PropertyPanel";
 import UploadPanel from "@/components/UploadPanel";
+import Legend from "@/components/Legend";
 import { IconBubbles, IconUpload } from "@/components/icons";
 import { useDiagram } from "@/store/useDiagram";
 
@@ -16,6 +17,7 @@ const Canvas = dynamic(() => import("@/components/Canvas"), { ssr: false });
 export default function Page() {
   const hydrate = useDiagram((s) => s.hydrate);
   const hydrated = useDiagram((s) => s.hydrated);
+  const theme = useDiagram((s) => s.diagram.theme ?? "light");
 
   const [showUpload, setShowUpload] = useState(false);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -26,6 +28,11 @@ export default function Page() {
   useEffect(() => {
     hydrate();
   }, [hydrate]);
+
+  // Reflect the active theme on the document root so CSS variables switch.
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
   // Track the canvas container size responsively.
   useEffect(() => {
@@ -52,6 +59,7 @@ export default function Page() {
           <Canvas ref={stageRef} width={size.width} height={size.height} />
         )}
         {hydrated && <PropertyPanel />}
+        {hydrated && <Legend />}
 
         {/* Empty-state hint */}
         {hydrated && <EmptyHint onUploadClick={() => setShowUpload(true)} />}

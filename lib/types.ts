@@ -1,6 +1,8 @@
 // Core data model for the bubble diagram tool.
+import type { CategoryId } from "./categories";
 
 export type Mode = "select" | "connect" | "draw";
+export type Theme = "light" | "dark";
 
 export interface Bubble {
   id: string;
@@ -11,6 +13,8 @@ export interface Bubble {
   /** Optional numeric value (e.g. area in m²) that drove the radius. */
   value?: number;
   color: string;
+  /** Functional category (drives color when set). */
+  category?: CategoryId;
 }
 
 export interface Link {
@@ -40,6 +44,8 @@ export interface Diagram {
   activeLayerId: string;
   /** Conversion ratio used by the measure tool. */
   pixelsPerMeter: number;
+  /** Canvas theme. */
+  theme?: Theme;
 }
 
 /** A parsed table from a spreadsheet or PDF: header row + data rows. */

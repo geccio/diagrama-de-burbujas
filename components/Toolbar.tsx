@@ -12,6 +12,8 @@ import {
   IconUpload,
   IconDownload,
   IconReset,
+  IconSun,
+  IconMoon,
 } from "@/components/icons";
 
 interface Props {
@@ -48,6 +50,8 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
   const resetAll = useDiagram((s) => s.resetAll);
   const saving = useDiagram((s) => s.saving);
   const pendingConnectId = useDiagram((s) => s.pendingConnectId);
+  const theme = useDiagram((s) => s.diagram.theme ?? "light");
+  const toggleTheme = useDiagram((s) => s.toggleTheme);
 
   function handleExport(kind: "png" | "pdf") {
     const stage = stageRef.current;
@@ -133,6 +137,15 @@ export default function Toolbar({ onUploadClick, stageRef }: Props) {
       >
         <IconDownload size={16} />
         PDF
+      </button>
+
+      <button
+        onClick={toggleTheme}
+        title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+        aria-label="Toggle theme"
+        className="flex cursor-pointer items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-2 text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)]"
+      >
+        {theme === "dark" ? <IconSun size={16} /> : <IconMoon size={16} />}
       </button>
 
       <button

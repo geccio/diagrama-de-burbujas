@@ -4,8 +4,31 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Semantic color tokens (dark canvas tool: purple + teal accents). */
+:root,
+:root[data-theme="light"] {
+  /* Light theme (default): clean, data-forward. */
+  --color-primary: #7c3aed;
+  --color-primary-hover: #6d28d9;
+  --color-on-primary: #ffffff;
+  --color-accent: #0891b2;
+  --color-accent-hover: #0e7490;
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f5f9;
+  --color-border: rgba(15, 23, 42, 0.1);
+  --color-fg: #0f172a;
+  --color-muted-fg: #64748b;
+  --color-destructive: #dc2626;
+  --color-destructive-hover: #b91c1c;
+  --color-ring: #7c3aed;
+  /* Canvas-specific (read by Konva via getComputedStyle). */
+  --canvas-bg: #f8fafc;
+  --canvas-grid: #e2e8f0;
+  --canvas-label: #0f172a;
+  --canvas-link: #94a3b8;
+}
+
+:root[data-theme="dark"] {
   --color-primary: #7c3aed;
   --color-primary-hover: #8b5cf6;
   --color-on-primary: #ffffff;
@@ -20,6 +43,10 @@
   --color-destructive: #dc2626;
   --color-destructive-hover: #ef4444;
   --color-ring: #8b5cf6;
+  --canvas-bg: #0f1115;
+  --canvas-grid: #1e293b;
+  --canvas-label: #0b1220;
+  --canvas-link: #64748b;
 }
 
 html,

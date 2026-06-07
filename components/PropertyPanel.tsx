@@ -2,6 +2,8 @@
 
 import { useDiagram } from "@/store/useDiagram";
 import { IconTrash } from "@/components/icons";
+import { CATEGORIES, CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
+import { radiusForValue } from "@/lib/bubbleLayout";
 
 const COLORS = [
   "#60a5fa",
@@ -28,6 +30,7 @@ export default function PropertyPanel() {
   const selectedBubbleId = useDiagram((s) => s.selectedBubbleId);
   const selectedLinkId = useDiagram((s) => s.selectedLinkId);
   const updateBubble = useDiagram((s) => s.updateBubble);
+  const setBubbleCategory = useDiagram((s) => s.setBubbleCategory);
   const deleteBubble = useDiagram((s) => s.deleteBubble);
   const deleteLink = useDiagram((s) => s.deleteLink);
 
@@ -85,23 +88,48 @@ export default function PropertyPanel() {
 
       <label className="mb-3 block">
         <span className="mb-1 block text-xs text-[var(--color-muted-fg)]">
-          Area value (m², optional)
+          Area value (m²) — resizes the bubble
         </span>
         <input
           type="number"
+          min={0}
+          step="0.5"
           value={bubble.value ?? ""}
-          onChange={(e) =>
-            updateBubble(bubble.id, {
-              value: e.target.value === "" ? undefined : Number(e.target.value),
-            })
-          }
+          onChange={(e) => {
+            if (e.target.value === "") {
+              updateBubble(bubble.id, { value: undefined });
+              return;
+            }
+            const value = Number(e.target.value);
+            // Keep circle area proportional to the entered value.
+            updateBubble(bubble.id, { value, radius: radiusForValue(value) });
+          }}
           className={inputClass}
         />
       </label>
 
+      <label className="mb-3 block">
+        <span className="mb-1 block text-xs text-[var(--color-muted-fg)]">
+          Category
+        </span>
+        <select
+          value={bubble.category ?? "other"}
+          onChange={(e) =>
+            setBubbleCategory(bubble.id, e.target.value as CategoryId)
+          }
+          className="w-full cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]"
+        >
+          {CATEGORY_ORDER.map((id) => (
+            <option key={id} value={id}>
+              {CATEGORIES[id].label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <div className="mb-4">
         <span className="mb-1.5 block text-xs text-[var(--color-muted-fg)]">
-          Color
+          Color <span className="opacity-60">(overrides category)</span>
         </span>
         <div className="flex flex-wrap gap-1.5">
           {COLORS.map((c) => (

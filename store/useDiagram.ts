@@ -5,11 +5,12 @@ import type { Bubble, Diagram, Drawing, Layer, Link, Mode } from "@/lib/types";
 import { uid } from "@/lib/id";
 import { loadDiagram, saveDiagram, clearDiagram } from "@/lib/storage";
 import {
-  colorForIndex,
   gridPositions,
   radiiFromValues,
   DEFAULT_RADIUS,
 } from "@/lib/bubbleLayout";
+import { detectCategory, categoryColor } from "@/lib/categories";
+import type { Theme } from "@/lib/types";
 
 function newLayer(name: string): Layer {
   return { id: uid("layer"), name, bubbles: [], links: [], drawings: [] };
@@ -17,7 +18,12 @@ function newLayer(name: string): Layer {
 
 function freshDiagram(): Diagram {
   const layer = newLayer("Layer 1");
-  return { layers: [layer], activeLayerId: layer.id, pixelsPerMeter: 50 };
+  return {
+    layers: [layer],
+    activeLayerId: layer.id,
+    pixelsPerMeter: 50,
+    theme: "light",
+  };
 }
 
 interface UIState {
@@ -52,6 +58,10 @@ interface DiagramState extends UIState {
   // scale
   setPixelsPerMeter: (ppm: number) => void;
 
+  // theme
+  setTheme: (theme: Theme) => void;
+  toggleTheme: () => void;
+
   // bubbles
   addBubblesFromRows: (
     rows: { label: string; value?: number }[],
@@ -61,6 +71,7 @@ interface DiagramState extends UIState {
   addBubble: (x: number, y: number) => void;
   moveBubble: (id: string, x: number, y: number) => void;
   updateBubble: (id: string, patch: Partial<Bubble>) => void;
+  setBubbleCategory: (id: string, category: import("@/lib/categories").CategoryId) => void;
   deleteBubble: (id: string) => void;
 
   // connect mode
@@ -182,6 +193,21 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     persist(next, set);
   },
 
+  setTheme: (theme) => {
+    const { diagram } = get();
+    const next: Diagram = { ...diagram, theme };
+    set({ diagram: next });
+    persist(next, set);
+  },
+
+  toggleTheme: () => {
+    const { diagram } = get();
+    const theme: Theme = diagram.theme === "dark" ? "light" : "dark";
+    const next: Diagram = { ...diagram, theme };
+    set({ diagram: next });
+    persist(next, set);
+  },
+
   addBubblesFromRows: (rows, mode, canvasSize) => {
     const { diagram } = get();
     const radii = radiiFromValues(rows.map((r) => r.value));
@@ -191,15 +217,20 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       canvasSize.width,
       canvasSize.height
     );
-    const newBubbles: Bubble[] = rows.map((r, i) => ({
-      id: uid("bubble"),
-      x: positions[i].x,
-      y: positions[i].y,
-      radius: radii[i],
-      label: r.label || "(blank)",
-      value: r.value,
-      color: colorForIndex(i),
-    }));
+    const newBubbles: Bubble[] = rows.map((r, i) => {
+      const label = r.label || "(blank)";
+      const category = detectCategory(label);
+      return {
+        id: uid("bubble"),
+        x: positions[i].x,
+        y: positions[i].y,
+        radius: radii[i],
+        label,
+        value: r.value,
+        category,
+        color: categoryColor(category),
+      };
+    });
 
     const layers = diagram.layers.map((l) => {
       if (l.id !== diagram.activeLayerId) return l;
@@ -223,7 +254,8 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       y,
       radius: DEFAULT_RADIUS,
       label: "New",
-      color: colorForIndex(layer.bubbles.length),
+      category: "other",
+      color: categoryColor("other"),
     };
     const layers = diagram.layers.map((l) =>
       l.id === diagram.activeLayerId
@@ -258,6 +290,25 @@ export const useDiagram = create<DiagramState>((set, get) => ({
             ...l,
             bubbles: l.bubbles.map((b) =>
               b.id === id ? { ...b, ...patch } : b
+            ),
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
+    persist(next, set);
+  },
+
+  setBubbleCategory: (id, category) => {
+    const { diagram } = get();
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            bubbles: l.bubbles.map((b) =>
+              b.id === id
+                ? { ...b, category, color: categoryColor(category) }
+                : b
             ),
           }
         : l

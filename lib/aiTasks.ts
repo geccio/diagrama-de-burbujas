@@ -135,6 +135,54 @@ export async function aiBuildDiagram(
   };
 }
 
+// --- editing existing bubbles via chat instructions ---
+
+export interface AiBubbleSnapshot {
+  id: string;
+  name: string;
+  area?: number;
+  category?: CategoryId;
+  floor?: string;
+}
+
+export interface AiEdit {
+  id: string;
+  name?: string;
+  area?: number;
+  category?: CategoryId;
+  floor?: string;
+  /** When true, delete this bubble. */
+  remove?: boolean;
+}
+
+export interface EditResult {
+  edits: AiEdit[];
+}
+
+/**
+ * Apply a natural-language instruction to the existing bubbles. The model gets
+ * each bubble's id + current fields and returns only the changes (by id).
+ */
+export async function aiEditBubbles(
+  settings: OllamaSettings,
+  bubbles: AiBubbleSnapshot[],
+  instruction: string
+): Promise<AiEdit[]> {
+  const system =
+    "You edit an architectural bubble diagram per the user's instruction. You " +
+    "receive the current bubbles as a JSON array, each with an id and fields " +
+    "(name, area in m², category, floor). Apply the instruction and respond ONLY " +
+    'with JSON: {"edits":[{"id":string, ...changedFields}]}. Include an item ' +
+    "ONLY for bubbles that change; include ONLY the fields that change, plus the " +
+    "id. To delete a bubble, return {\"id\":..., \"remove\":true}. Valid category " +
+    "values: " +
+    CATEGORY_LIST +
+    ". Keep ids exactly as given. Do not invent new bubbles. Numbers for area.";
+  const user = `Bubbles: ${JSON.stringify(bubbles)}\nInstruction: ${instruction}`;
+  const res = await chatJson<EditResult>(settings, system, user);
+  return Array.isArray(res.edits) ? res.edits : [];
+}
+
 /** Cap rows sent to the model and drop fully-empty ones to save tokens. */
 function sampleForPrompt(
   rows: Record<string, string>[],

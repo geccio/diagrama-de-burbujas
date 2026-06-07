@@ -12,6 +12,7 @@ import {
 import {
   aiGenerateProgram,
   aiSuggestAdjacencies,
+  aiEditBubbles,
   normalizeCategory,
 } from "@/lib/aiTasks";
 import { IconX, IconWarning } from "@/components/icons";
@@ -31,10 +32,12 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
   const layer = useDiagram((s) => s.activeLayer());
   const addSpaces = useDiagram((s) => s.addSpaces);
   const addLinksByNames = useDiagram((s) => s.addLinksByNames);
+  const applyAiEdits = useDiagram((s) => s.applyAiEdits);
 
   const [settings, setSettings] = useState<OllamaSettings>(loadOllamaSettings());
   const [models, setModels] = useState<string[]>([]);
   const [brief, setBrief] = useState("");
+  const [editInstruction, setEditInstruction] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   useEffect(() => {
@@ -99,6 +102,53 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
         kind: "ok",
         msg: `Added ${adj.length} suggested connection(s).`,
       });
+    } catch (e) {
+      setStatus({ kind: "error", msg: describeOllamaError(e) });
+    }
+  }
+
+  async function handleEdit() {
+    if (!editInstruction.trim()) return;
+    if (layer.bubbles.length === 0) {
+      setStatus({ kind: "error", msg: "There are no bubbles to edit yet." });
+      return;
+    }
+    setStatus({ kind: "busy", msg: "Applying edits…" });
+    try {
+      const snapshot = layer.bubbles.map((b) => ({
+        id: b.id,
+        name: b.label,
+        area: b.value,
+        category: b.category,
+        floor: b.floor,
+      }));
+      const edits = await aiEditBubbles(
+        settings,
+        snapshot,
+        editInstruction.trim()
+      );
+      const changed = applyAiEdits(
+        edits.map((e) => ({
+          id: e.id,
+          name: e.name,
+          area: e.area,
+          category: normalizeCategory(e.category) ?? e.category,
+          floor: e.floor,
+          remove: e.remove,
+        }))
+      );
+      if (changed === 0) {
+        setStatus({
+          kind: "error",
+          msg: "No matching changes were applied. Try rephrasing.",
+        });
+        return;
+      }
+      setStatus({
+        kind: "ok",
+        msg: `Updated ${changed} bubble(s). Press Ctrl+Z to undo.`,
+      });
+      setEditInstruction("");
     } catch (e) {
       setStatus({ kind: "error", msg: describeOllamaError(e) });
     }
@@ -223,6 +273,29 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
             className="cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-sm text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)] disabled:opacity-50"
           >
             Suggest connections
+          </button>
+        </div>
+
+        {/* Edit existing bubbles via instruction */}
+        <div className="mb-4 rounded-xl border border-[var(--color-border)] p-3">
+          <h3 className="mb-1 text-sm font-medium">Edit existing bubbles</h3>
+          <p className="mb-2 text-xs text-[var(--color-muted-fg)]">
+            Tell the AI what to change on the {layer.bubbles.length} current
+            bubbles. Changes apply right away — Ctrl+Z to undo.
+          </p>
+          <textarea
+            value={editInstruction}
+            onChange={(e) => setEditInstruction(e.target.value)}
+            rows={2}
+            placeholder="e.g. Set all bathrooms to 6 m². Rename 'Nucleo' to 'Core'. Make meeting rooms 20% bigger. Recategorize parking as infrastructure."
+            className="mb-2 w-full resize-none rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] focus:border-[var(--color-ring)]"
+          />
+          <button
+            onClick={handleEdit}
+            disabled={busy || !editInstruction.trim() || layer.bubbles.length === 0}
+            className="cursor-pointer rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-primary)] transition-colors duration-150 hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
+          >
+            Apply edits
           </button>
         </div>
 

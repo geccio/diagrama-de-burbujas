@@ -36,7 +36,10 @@ Fully client-side — your data never leaves your browser.
 - **Rich export** — PNG/PDF sheet with a title block, legend, and area totals.
 - **AI assistant (Ollama, local)** — bring your own local model to: generate a
   program from a plain-language brief, suggest adjacencies on existing bubbles,
-  and auto-map messy spreadsheet/PDF columns to name / area / category / floor.
+  **edit existing bubbles with chat instructions** ("set all bathrooms to 6 m²",
+  "rename Nucleo to Core", "recategorize parking as infrastructure"), build a
+  whole diagram from an uploaded file, and auto-map messy spreadsheet/PDF columns
+  to name / area / category / floor. Edits apply instantly and are undoable.
 - **Undo / Redo** — Ctrl+Z / Ctrl+Shift+Z across all edits.
 - **Save / Load project files** — export the whole diagram (incl. images) to a
   portable `.json` and reopen it anywhere.

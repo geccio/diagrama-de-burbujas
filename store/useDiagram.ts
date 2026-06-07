@@ -7,6 +7,7 @@ import { loadDiagram, saveDiagram, clearDiagram } from "@/lib/storage";
 import {
   gridPositions,
   radiiFromValues,
+  radiusForValue,
   clusterByCategory,
   DEFAULT_RADIUS,
 } from "@/lib/bubbleLayout";
@@ -100,6 +101,16 @@ interface DiagramState extends UIState {
   addLinksByNames: (
     pairs: { a: string; b: string; kind?: import("@/lib/types").LinkKind }[]
   ) => void;
+  applyAiEdits: (
+    edits: {
+      id: string;
+      name?: string;
+      area?: number;
+      category?: import("@/lib/categories").CategoryId;
+      floor?: string;
+      remove?: boolean;
+    }[]
+  ) => number;
   addBubble: (x: number, y: number) => void;
   moveBubble: (id: string, x: number, y: number) => void;
   updateBubble: (id: string, patch: Partial<Bubble>) => void;
@@ -531,6 +542,62 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
     commit(diagram, next, set);
+  },
+
+  applyAiEdits: (edits) => {
+    const { diagram } = get();
+    const editById = new Map(edits.map((e) => [e.id, e]));
+    let changed = 0;
+
+    const layers = diagram.layers.map((l) => {
+      if (l.id !== diagram.activeLayerId) return l;
+      const removeIds = new Set(
+        edits.filter((e) => e.remove).map((e) => e.id)
+      );
+      const bubbles = l.bubbles
+        .filter((b) => {
+          if (removeIds.has(b.id)) {
+            changed++;
+            return false;
+          }
+          return true;
+        })
+        .map((b) => {
+          const e = editById.get(b.id);
+          if (!e || e.remove) return b;
+          const patch: Partial<Bubble> = {};
+          if (typeof e.name === "string" && e.name.trim() && e.name !== b.label)
+            patch.label = e.name;
+          if (
+            typeof e.area === "number" &&
+            isFinite(e.area) &&
+            e.area !== b.value
+          ) {
+            patch.value = e.area;
+            patch.radius = radiusForValue(e.area);
+          }
+          if (e.category && e.category !== b.category) {
+            patch.category = e.category;
+            patch.color = categoryColor(e.category);
+          }
+          if (typeof e.floor === "string" && e.floor !== b.floor)
+            patch.floor = e.floor || undefined;
+          if (Object.keys(patch).length === 0) return b;
+          changed++;
+          return { ...b, ...patch };
+        });
+      // Drop links touching removed bubbles.
+      const links = l.links.filter(
+        (k) => !removeIds.has(k.fromBubbleId) && !removeIds.has(k.toBubbleId)
+      );
+      return { ...l, bubbles, links };
+    });
+
+    if (changed === 0) return 0;
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next, selectedBubbleId: null, selectedLinkId: null });
+    commit(diagram, next, set);
+    return changed;
   },
 
   addBubble: (x, y) => {

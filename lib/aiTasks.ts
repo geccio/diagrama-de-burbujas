@@ -1,5 +1,10 @@
 // AI task prompts + result shapes for the Ollama integration.
-import { chatJson, type OllamaSettings } from "./ollama";
+import {
+  chatJson,
+  chatJsonMessages,
+  type OllamaSettings,
+  type ChatMessage,
+} from "./ollama";
 import type { CategoryId } from "./categories";
 
 const CATEGORY_LIST = "core, public, services, infrastructure, other";
@@ -135,6 +140,41 @@ export async function aiBuildDiagram(
   };
 }
 
+// --- vision: read a floor-plan image / PDF page ---
+
+/**
+ * Send an image (base64, no data: prefix) of a floor plan to a vision model and
+ * extract spaces + adjacencies. Requires a vision-capable model (e.g. llava).
+ */
+export async function aiReadPlanImage(
+  settings: OllamaSettings,
+  imageBase64: string
+): Promise<BuildResult> {
+  const system =
+    "You are an architect reading a floor-plan image. Identify the rooms/spaces " +
+    "you can see, estimate each area in m² if labels or a scale are visible " +
+    "(otherwise omit area), assign a category (one of [" +
+    CATEGORY_LIST +
+    "]) and a floor/level if shown. Also infer obvious adjacencies (rooms that " +
+    "share a wall or door). Respond ONLY with JSON: " +
+    '{"spaces":[{"name":string,"area":number,"category":string,"floor":string}],' +
+    '"adjacencies":[{"a":name,"b":name,"kind":"solid"|"dashed"}]}.';
+  const messages: ChatMessage[] = [
+    { role: "system", content: system },
+    {
+      role: "user",
+      content:
+        "Read this floor plan and return the spaces and adjacencies as JSON.",
+      images: [imageBase64],
+    },
+  ];
+  const res = await chatJsonMessages<BuildResult>(settings, messages);
+  return {
+    spaces: Array.isArray(res.spaces) ? res.spaces : [],
+    adjacencies: Array.isArray(res.adjacencies) ? res.adjacencies : [],
+  };
+}
+
 // --- editing existing bubbles via chat instructions ---
 
 export interface AiBubbleSnapshot {
@@ -181,6 +221,101 @@ export async function aiEditBubbles(
   const user = `Bubbles: ${JSON.stringify(bubbles)}\nInstruction: ${instruction}`;
   const res = await chatJson<EditResult>(settings, system, user);
   return Array.isArray(res.edits) ? res.edits : [];
+}
+
+// --- free-form chat (create + edit across turns) ---
+
+export interface ChatAction {
+  op: "create" | "edit" | "delete" | "link";
+  // create:
+  name?: string;
+  area?: number;
+  category?: CategoryId;
+  floor?: string;
+  // edit/delete (by id from the snapshot):
+  id?: string;
+  // link (by names):
+  a?: string;
+  b?: string;
+  kind?: "solid" | "dashed";
+}
+
+export interface ChatTurnResult {
+  reply: string;
+  actions: ChatAction[];
+}
+
+/**
+ * Conversational assistant that can create AND edit the diagram across turns.
+ * `history` is prior user/assistant turns (text only). `bubbles` is the current
+ * snapshot (with ids) so the model can reference/edit existing spaces.
+ */
+export async function aiChatTurn(
+  settings: OllamaSettings,
+  history: { role: "user" | "assistant"; content: string }[],
+  bubbles: AiBubbleSnapshot[],
+  userMessage: string
+): Promise<ChatTurnResult> {
+  const system =
+    "You are a conversational assistant for an architectural bubble diagram. " +
+    "You can add spaces, edit/delete existing ones, and connect them, based on " +
+    "the conversation. The current bubbles (with ids) are given each turn. " +
+    "Respond ONLY with JSON: {\"reply\":string,\"actions\":[...]}. Each action " +
+    'is one of: {"op":"create","name":str,"area":num,"category":cat,' +
+    '"floor":str}; {"op":"edit","id":str, ...changedFields}; ' +
+    '{"op":"delete","id":str}; {"op":"link","a":name,"b":name,' +
+    '"kind":"solid"|"dashed"}. Categories: ' +
+    CATEGORY_LIST +
+    ". Use existing ids for edit/delete; use space NAMES for link. If the user " +
+    "is just chatting/asking, return an empty actions array and answer in reply. " +
+    "Keep reply short.";
+  const snapshot = `Current bubbles: ${JSON.stringify(bubbles)}`;
+  const messages: ChatMessage[] = [
+    { role: "system", content: system },
+    ...history.map((h) => ({ role: h.role, content: h.content })),
+    { role: "user", content: `${snapshot}\n\nUser: ${userMessage}` },
+  ];
+  const res = await chatJsonMessages<ChatTurnResult>(settings, messages);
+  return {
+    reply: typeof res.reply === "string" ? res.reply : "",
+    actions: Array.isArray(res.actions) ? res.actions : [],
+  };
+}
+
+// --- design critique ---
+
+export interface AiCritiqueItem {
+  severity: "high" | "medium" | "low";
+  title: string;
+  detail: string;
+}
+
+export interface CritiqueResult {
+  findings: AiCritiqueItem[];
+}
+
+/** Ask the model to review the layout and flag space-planning issues. */
+export async function aiCritique(
+  settings: OllamaSettings,
+  bubbles: AiBubbleSnapshot[],
+  connections: { a: string; b: string }[]
+): Promise<AiCritiqueItem[]> {
+  const system =
+    "You are a senior architect reviewing a space-planning bubble diagram. You " +
+    "get the spaces (name, area m², category, floor) and their connections. " +
+    "Identify concrete issues and improvements: missing essential spaces " +
+    "(e.g. no core/circulation, no bathrooms), poor adjacencies (e.g. bathroom " +
+    "far from circulation, kitchen not near dining), unusual areas (too small/" +
+    "large for the use), category imbalance, isolated spaces with no connections, " +
+    "or floor-stacking problems. Respond ONLY with JSON: " +
+    '{"findings":[{"severity":"high"|"medium"|"low","title":string,' +
+    '"detail":string}]}. Be specific and reference space names. Limit to the ' +
+    "8 most useful findings. If the layout is solid, return few or none.";
+  const user = `Spaces: ${JSON.stringify(bubbles)}\nConnections: ${JSON.stringify(
+    connections
+  )}`;
+  const res = await chatJson<CritiqueResult>(settings, system, user);
+  return Array.isArray(res.findings) ? res.findings : [];
 }
 
 /** Cap rows sent to the model and drop fully-empty ones to save tokens. */

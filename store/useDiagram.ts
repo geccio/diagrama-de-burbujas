@@ -41,6 +41,8 @@ interface UIState {
   fitRequest: number;
   /** When true, the canvas is in 2-click scale-calibration mode. */
   calibrating: boolean;
+  /** Active floor filter ("__all__" = show every floor). */
+  floorFilter: string;
   /** Undo/redo availability (counts) for the UI. */
   canUndo: boolean;
   canRedo: boolean;
@@ -82,6 +84,9 @@ interface DiagramState extends UIState {
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 
+  // floor filter (UI-only)
+  setFloorFilter: (floor: string) => void;
+
   // bubbles
   addBubblesFromRows: (
     rows: { label: string; value?: number }[],
@@ -110,6 +115,10 @@ interface DiagramState extends UIState {
       floor?: string;
       remove?: boolean;
     }[]
+  ) => number;
+  applyChatActions: (
+    actions: import("@/lib/aiTasks").ChatAction[],
+    canvasSize: { width: number; height: number }
   ) => number;
   addBubble: (x: number, y: number) => void;
   moveBubble: (id: string, x: number, y: number) => void;
@@ -197,6 +206,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
   saving: false,
   fitRequest: 0,
   calibrating: false,
+  floorFilter: "__all__",
   canUndo: false,
   canRedo: false,
 
@@ -382,6 +392,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       selectedBubbleId: null,
       selectedLinkId: null,
       pendingConnectId: null,
+      floorFilter: "__all__",
     });
     persist({ ...diagram, activeLayerId: id }, set);
   },
@@ -416,6 +427,8 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     set({ diagram: next });
     persist(next, set);
   },
+
+  setFloorFilter: (floor) => set({ floorFilter: floor }),
 
   addBubblesFromRows: (rows, mode, canvasSize) => {
     const { diagram } = get();
@@ -596,6 +609,105 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     if (changed === 0) return 0;
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next, selectedBubbleId: null, selectedLinkId: null });
+    commit(diagram, next, set);
+    return changed;
+  },
+
+  applyChatActions: (actions, canvasSize) => {
+    if (!actions || actions.length === 0) return 0;
+    const { diagram } = get();
+    const layer = get().activeLayer();
+    let bubbles = [...layer.bubbles];
+    let links = [...layer.links];
+    let changed = 0;
+
+    // Spawn new bubbles in a small grid offset from existing content.
+    const creates = actions.filter((a) => a.op === "create");
+    if (creates.length) {
+      const radii = radiiFromValues(creates.map((c) => c.area));
+      const positions = gridPositions(
+        creates.length,
+        radii,
+        canvasSize.width || 1200,
+        canvasSize.height || 800
+      );
+      creates.forEach((c, i) => {
+        const label = c.name || "New";
+        const category = c.category ?? detectCategory(label);
+        bubbles.push({
+          id: uid("bubble"),
+          x: positions[i].x,
+          y: positions[i].y,
+          radius: radii[i],
+          label,
+          value: c.area,
+          category,
+          floor: c.floor,
+          color: categoryColor(category),
+        });
+        changed++;
+      });
+    }
+
+    // Edits + deletes by id.
+    for (const a of actions) {
+      if (a.op === "delete" && a.id) {
+        const before = bubbles.length;
+        bubbles = bubbles.filter((b) => b.id !== a.id);
+        links = links.filter(
+          (k) => k.fromBubbleId !== a.id && k.toBubbleId !== a.id
+        );
+        if (bubbles.length !== before) changed++;
+      } else if (a.op === "edit" && a.id) {
+        bubbles = bubbles.map((b) => {
+          if (b.id !== a.id) return b;
+          const patch: Partial<Bubble> = {};
+          if (a.name && a.name !== b.label) patch.label = a.name;
+          if (typeof a.area === "number" && a.area !== b.value) {
+            patch.value = a.area;
+            patch.radius = radiusForValue(a.area);
+          }
+          if (a.category && a.category !== b.category) {
+            patch.category = a.category;
+            patch.color = categoryColor(a.category);
+          }
+          if (typeof a.floor === "string" && a.floor !== b.floor)
+            patch.floor = a.floor || undefined;
+          if (Object.keys(patch).length) changed++;
+          return { ...b, ...patch };
+        });
+      }
+    }
+
+    // Links by name (resolved against the updated bubble set).
+    const idByName = new Map<string, string>();
+    for (const b of bubbles) idByName.set(b.label.toLowerCase().trim(), b.id);
+    const existing = new Set(
+      links.map((k) => [k.fromBubbleId, k.toBubbleId].sort().join("|"))
+    );
+    for (const a of actions) {
+      if (a.op !== "link") continue;
+      const fromId = idByName.get(a.a?.toLowerCase().trim() ?? "");
+      const toId = idByName.get(a.b?.toLowerCase().trim() ?? "");
+      if (!fromId || !toId || fromId === toId) continue;
+      const key = [fromId, toId].sort().join("|");
+      if (existing.has(key)) continue;
+      existing.add(key);
+      links.push({
+        id: uid("link"),
+        fromBubbleId: fromId,
+        toBubbleId: toId,
+        kind: a.kind ?? "solid",
+      });
+      changed++;
+    }
+
+    if (changed === 0) return 0;
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId ? { ...l, bubbles, links } : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({ diagram: next });
     commit(diagram, next, set);
     return changed;
   },

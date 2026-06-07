@@ -146,6 +146,16 @@ export function IconBubbles(props: IconProps) {
   );
 }
 
+/** Layers / floors (stacked sheets). */
+export function IconLayers(props: IconProps) {
+  return (
+    <svg {...svgProps(props)} aria-hidden="true">
+      <path d="m12 2 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 12 9 5 9-5M3 17l9 5 9-5" />
+    </svg>
+  );
+}
+
 /** Sparkles (AI). */
 export function IconSparkles(props: IconProps) {
   return (

@@ -58,7 +58,14 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   const selectedBubbleIds = useDiagram((s) => s.selectedBubbleIds);
   const setMultiSelection = useDiagram((s) => s.setMultiSelection);
   const bulkMove = useDiagram((s) => s.bulkMove);
+  const floorFilter = useDiagram((s) => s.floorFilter);
   const background = layer.background;
+
+  // Bubble passes the floor filter (always true when "all" or no floor set).
+  function onActiveFloor(floor?: string): boolean {
+    if (floorFilter === "__all__") return true;
+    return (floor ?? "").trim() === floorFilter;
+  }
   const multiSel = useMemo(
     () => new Set(selectedBubbleIds),
     [selectedBubbleIds]
@@ -389,6 +396,7 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
           if (!a || !b) return null;
           const selected = link.id === selectedLinkId;
           const dashed = link.kind === "dashed";
+          const dimmed = !onActiveFloor(a.floor) || !onActiveFloor(b.floor);
           return (
             <Line
               key={link.id}
@@ -396,6 +404,8 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
               stroke={selected ? "#ef4444" : colors.link}
               strokeWidth={selected ? 4 : 2.5}
               dash={dashed ? [9, 7] : undefined}
+              opacity={dimmed ? 0.1 : 1}
+              listening={!dimmed}
               hitStrokeWidth={14}
               onClick={(e) => {
                 e.cancelBubble = true;
@@ -416,12 +426,15 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
           const isSelected = b.id === selectedBubbleId;
           const isMulti = multiSel.has(b.id);
           const isPending = b.id === pendingConnectId;
+          const dimmed = !onActiveFloor(b.floor);
           return (
             <Group
               key={b.id}
               x={b.x}
               y={b.y}
-              draggable={mode === "select"}
+              opacity={dimmed ? 0.12 : 1}
+              listening={!dimmed}
+              draggable={mode === "select" && !dimmed}
               onDragStart={() => {
                 pushHistory();
                 dragPrev.current = { x: b.x, y: b.y };

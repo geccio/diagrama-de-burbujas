@@ -90,6 +90,47 @@ export async function chatJson<T>(
   }
 }
 
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+  /** Optional base64 images (no data: prefix) for vision models. */
+  images?: string[];
+}
+
+/**
+ * Multi-turn JSON chat. Pass the full message history (incl. a system message).
+ * Supports images on a message for vision models. Returns parsed JSON.
+ */
+export async function chatJsonMessages<T>(
+  settings: OllamaSettings,
+  messages: ChatMessage[]
+): Promise<T> {
+  const res = await fetch(`${base(settings.endpoint)}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: settings.model,
+      stream: false,
+      format: "json",
+      options: { temperature: 0.3 },
+      messages,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Ollama error ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const data = (await res.json()) as { message?: { content?: string } };
+  const content = data.message?.content ?? "";
+  try {
+    return JSON.parse(content) as T;
+  } catch {
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]) as T;
+    throw new Error("The model did not return valid JSON.");
+  }
+}
+
 /** Friendly message for the common CORS / connection failure. */
 export function describeOllamaError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type Konva from "konva";
 import { useDiagram } from "@/store/useDiagram";
 import type { Mode } from "@/lib/types";
@@ -31,6 +31,7 @@ import {
   IconCalibrate,
   IconMatrix,
   IconSparkles,
+  IconLayers,
 } from "@/components/icons";
 
 interface Props {
@@ -87,6 +88,8 @@ export default function Toolbar({
   const canUndo = useDiagram((s) => s.canUndo);
   const canRedo = useDiagram((s) => s.canRedo);
   const startCalibration = useDiagram((s) => s.startCalibration);
+  const floorFilter = useDiagram((s) => s.floorFilter);
+  const setFloorFilter = useDiagram((s) => s.setFloorFilter);
   const diagram = useDiagram((s) => s.diagram);
   const loadDiagramObject = useDiagram((s) => s.loadDiagramObject);
   const layer = useDiagram((s) => s.activeLayer());
@@ -94,6 +97,17 @@ export default function Toolbar({
 
   const hasBubbles = layer.bubbles.length > 0;
   const hasDrawings = layer.drawings.length > 0;
+
+  // Derive floors from the layer (don't call a new-array-returning store
+  // selector, which would loop). useMemo keeps the reference stable.
+  const floors = useMemo(() => {
+    const set = new Set<string>();
+    for (const b of layer.bubbles) {
+      const f = (b.floor ?? "").trim();
+      if (f) set.add(f);
+    }
+    return Array.from(set);
+  }, [layer.bubbles]);
 
   // Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo.
   useEffect(() => {
@@ -306,6 +320,29 @@ export default function Toolbar({
       >
         <IconCalibrate size={16} />
       </button>
+
+      {/* Floor filter (only when bubbles have floors) */}
+      {floors.length > 0 && (
+        <label
+          className="flex items-center gap-1.5 text-sm text-[var(--color-muted-fg)]"
+          title="Show only one floor"
+        >
+          <IconLayers size={16} />
+          <select
+            value={floorFilter}
+            onChange={(e) => setFloorFilter(e.target.value)}
+            aria-label="Floor filter"
+            className="cursor-pointer rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]"
+          >
+            <option value="__all__">All floors</option>
+            {floors.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <div className="h-6 w-px bg-[var(--color-border)]" />
 

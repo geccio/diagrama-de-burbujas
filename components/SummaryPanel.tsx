@@ -3,26 +3,13 @@
 import { useMemo, useState } from "react";
 import { useDiagram } from "@/store/useDiagram";
 import { CATEGORIES, CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
+import { floorTotals } from "@/lib/floorTotals";
 import { IconX } from "@/components/icons";
 
 /**
  * Collapsible top-right panel with live area totals: total m² per category,
  * layer total, bubble count, and % distribution.
  */
-// Distinct colors for floor rows (floors have no inherent color like categories).
-const FLOOR_COLORS = [
-  "#60a5fa",
-  "#34d399",
-  "#fbbf24",
-  "#f87171",
-  "#a78bfa",
-  "#22d3ee",
-  "#fb923c",
-  "#f472b6",
-];
-const NO_FLOOR_COLOR = "#94a3b8";
-const NO_FLOOR_LABEL = "(no floor)";
-
 type Row = { key: string; label: string; color: string; area: number };
 
 export default function SummaryPanel() {
@@ -36,20 +23,13 @@ export default function SummaryPanel() {
     let total = 0;
     let withArea = 0;
     const byCat = new Map<CategoryId, { area: number; count: number }>();
-    // Keep floor insertion order so rows are stable; "(no floor)" sinks to last.
-    const byFloor = new Map<string, number>();
     for (const b of layer.bubbles) {
       const cat = (b.category ?? "other") as CategoryId;
       if (!byCat.has(cat)) byCat.set(cat, { area: 0, count: 0 });
       const entry = byCat.get(cat)!;
       entry.count += 1;
-
-      const floor = (b.floor ?? "").trim() || NO_FLOOR_LABEL;
-      if (!byFloor.has(floor)) byFloor.set(floor, 0);
-
       if (typeof b.value === "number" && isFinite(b.value) && b.value > 0) {
         entry.area += b.value;
-        byFloor.set(floor, byFloor.get(floor)! + b.value);
         total += b.value;
         withArea += 1;
       }
@@ -62,24 +42,12 @@ export default function SummaryPanel() {
       area: byCat.get(c)!.area,
     }));
 
-    // Floors: real floors first (alpha), then "(no floor)" last.
-    const floorKeys = Array.from(byFloor.keys())
-      .filter((f) => f !== NO_FLOOR_LABEL)
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    const floors: Row[] = floorKeys.map((f, i) => ({
-      key: f,
-      label: f,
-      color: FLOOR_COLORS[i % FLOOR_COLORS.length],
-      area: byFloor.get(f)!,
+    const floors: Row[] = floorTotals(layer.bubbles).map((f) => ({
+      key: f.name,
+      label: f.name,
+      color: f.color,
+      area: f.area,
     }));
-    if (byFloor.has(NO_FLOOR_LABEL)) {
-      floors.push({
-        key: NO_FLOOR_LABEL,
-        label: NO_FLOOR_LABEL,
-        color: NO_FLOOR_COLOR,
-        area: byFloor.get(NO_FLOOR_LABEL)!,
-      });
-    }
 
     return { total, withArea, cats, floors, count: layer.bubbles.length };
   }, [layer.bubbles]);

@@ -11,6 +11,7 @@ import {
 } from "@/lib/exportImage";
 import { exportProject, importProject } from "@/lib/projectFile";
 import { CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
+import { floorTotals } from "@/lib/floorTotals";
 import {
   IconBubbles,
   IconCursor,
@@ -161,6 +162,7 @@ export default function Toolbar({
         id: c,
         ...byCat.get(c)!,
       })),
+      floors: floorTotals(layer.bubbles),
       hasConnections: layer.links.length > 0,
     };
   }

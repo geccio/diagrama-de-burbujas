@@ -19,6 +19,8 @@ export interface SheetMeta {
   totalArea: number;
   bubbleCount: number;
   categories: { id: CategoryId; area: number; count: number }[];
+  /** Per-floor area totals (mirrors the Totals panel's "By Floor" view). */
+  floors: { name: string; color: string; area: number; count: number }[];
   hasConnections: boolean;
 }
 
@@ -37,7 +39,8 @@ async function buildSheet(stage: Konva.Stage, meta: SheetMeta) {
   const W = stage.width();
   const H = stage.height();
   const headerH = 70;
-  const footerH = 150;
+  // Tall enough to fit category + floor totals side by side (up to ~6 rows each).
+  const footerH = meta.floors.length > 0 ? 190 : 150;
   const sheetW = W;
   const sheetH = headerH + H + footerH;
 
@@ -127,35 +130,66 @@ function drawFooter(
   ctx.stroke();
 
   ctx.textBaseline = "middle";
+
+  const colW = 250;
+  const rowH = 24;
+  const rowsTop = footerY + 40;
+  const rowsBottom = footerY + footerH - 8;
+
+  // Generic "color dot + label … value" row drawer; returns the next y.
+  const drawRow = (
+    x: number,
+    y: number,
+    color: string,
+    label: string,
+    value: string
+  ) => {
+    ctx.textAlign = "left";
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x + 6, y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = t.fg;
+    ctx.font = "13px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText(label, x + 20, y);
+    ctx.textAlign = "right";
+    ctx.fillStyle = t.muted;
+    ctx.font = "13px ui-monospace, monospace";
+    ctx.fillText(value, x + colW - 24, y);
+    ctx.textAlign = "left";
+  };
+
+  // Column 1: category totals.
   ctx.textAlign = "left";
   ctx.fillStyle = t.muted;
   ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
   ctx.fillText("CATEGORY TOTALS", pad, footerY + 16);
 
-  const colW = 250;
-  const rowH = 24;
   let cx = pad;
-  let cy = footerY + 40;
-  ctx.font = "13px ui-sans-serif, system-ui, sans-serif";
+  let cy = rowsTop;
   for (const c of meta.categories) {
-    if (cy + rowH > footerY + footerH - 8) {
+    if (cy + rowH > rowsBottom) {
       cx += colW;
-      cy = footerY + 40;
+      cy = rowsTop;
     }
     const cat = CATEGORIES[c.id];
-    ctx.fillStyle = cat.color;
-    ctx.beginPath();
-    ctx.arc(cx + 6, cy, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = t.fg;
-    ctx.font = "13px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillText(cat.label, cx + 20, cy);
-    ctx.textAlign = "right";
-    ctx.fillStyle = t.muted;
-    ctx.font = "13px ui-monospace, monospace";
-    ctx.fillText(`${formatArea(c.area)} m² · ${c.count}`, cx + colW - 24, cy);
-    ctx.textAlign = "left";
+    drawRow(cx, cy, cat.color, cat.label, `${formatArea(c.area)} m² · ${c.count}`);
     cy += rowH;
+  }
+
+  // Column 2: floor totals (mirrors the Totals panel's "By Floor" view).
+  if (meta.floors.length > 0) {
+    const fx = pad + colW;
+    let fy = rowsTop;
+    ctx.textAlign = "left";
+    ctx.fillStyle = t.muted;
+    ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
+    ctx.fillText("FLOOR TOTALS", fx, footerY + 16);
+    for (const f of meta.floors) {
+      if (fy + rowH > rowsBottom) break;
+      drawRow(fx, fy, f.color, f.name, `${formatArea(f.area)} m² · ${f.count}`);
+      fy += rowH;
+    }
   }
 
   if (meta.hasConnections) {

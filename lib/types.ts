@@ -28,6 +28,8 @@ export interface Link {
   toBubbleId: string;
   /** "solid" = sure/direct, "dashed" = intermittent/uncertain. Default solid. */
   kind?: LinkKind;
+  /** Optional line color (hex). When unset, the theme's default link color is used. */
+  color?: string;
 }
 
 export interface Drawing {

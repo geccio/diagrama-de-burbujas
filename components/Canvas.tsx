@@ -401,12 +401,12 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
             <Line
               key={link.id}
               points={[a.x, a.y, b.x, b.y]}
-              stroke={selected ? "#ef4444" : colors.link}
+              stroke={selected ? "#ef4444" : link.color ?? colors.link}
               strokeWidth={selected ? 4 : 2.5}
               dash={dashed ? [9, 7] : undefined}
               opacity={dimmed ? 0.1 : 1}
               listening={!dimmed}
-              hitStrokeWidth={14}
+              hitStrokeWidth={18}
               onClick={(e) => {
                 e.cancelBubble = true;
                 if (mode !== "draw") selectLink(link.id);
@@ -414,6 +414,18 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
               onTap={(e) => {
                 e.cancelBubble = true;
                 if (mode !== "draw") selectLink(link.id);
+              }}
+              // Pointer hint so lines read as clickable/selectable.
+              onMouseEnter={(e) => {
+                if (mode !== "draw") {
+                  const stage = e.target.getStage();
+                  if (stage) stage.container().style.cursor = "pointer";
+                }
+              }}
+              onMouseLeave={(e) => {
+                const stage = e.target.getStage();
+                if (stage) stage.container().style.cursor =
+                  mode === "draw" ? "crosshair" : "default";
               }}
             />
           );

@@ -32,6 +32,7 @@ export default function PropertyPanel() {
   const updateBubble = useDiagram((s) => s.updateBubble);
   const setBubbleCategory = useDiagram((s) => s.setBubbleCategory);
   const setLinkKind = useDiagram((s) => s.setLinkKind);
+  const setLinkColor = useDiagram((s) => s.setLinkColor);
   const deleteBubble = useDiagram((s) => s.deleteBubble);
   const deleteLink = useDiagram((s) => s.deleteLink);
   const duplicateSelection = useDiagram((s) => s.duplicateSelection);
@@ -89,6 +90,37 @@ export default function PropertyPanel() {
             ? "Dashed = intermittent / uncertain relationship."
             : "Solid = sure / direct relationship."}
         </p>
+
+        <div className="mb-4">
+          <span className="mb-1.5 block text-xs text-[var(--color-muted-fg)]">
+            Line color
+          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              onClick={() => setLinkColor(selectedLinkId, undefined)}
+              title="Default (theme color)"
+              className={`flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[10px] font-medium text-[var(--color-muted-fg)] ring-2 transition-transform duration-150 hover:scale-110 ${
+                !link.color ? "ring-white" : "ring-transparent"
+              }`}
+              aria-label="Default line color"
+              aria-pressed={!link.color}
+            >
+              A
+            </button>
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setLinkColor(selectedLinkId, c)}
+                style={{ background: c }}
+                className={`h-6 w-6 cursor-pointer rounded-full ring-2 transition-transform duration-150 hover:scale-110 ${
+                  link.color === c ? "ring-white" : "ring-transparent"
+                }`}
+                aria-label={`Set line color ${c}`}
+                aria-pressed={link.color === c}
+              />
+            ))}
+          </div>
+        </div>
 
         <button onClick={() => deleteLink(selectedLinkId)} className={dangerBtn}>
           <IconTrash size={16} />

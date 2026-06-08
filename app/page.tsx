@@ -13,6 +13,7 @@ import SummaryPanel from "@/components/SummaryPanel";
 import MultiSelectBar from "@/components/MultiSelectBar";
 import AdjacencyMatrix from "@/components/AdjacencyMatrix";
 import AiPanel from "@/components/AiPanel";
+import ChatWidget from "@/components/ChatWidget";
 import { IconBubbles, IconUpload } from "@/components/icons";
 import { useDiagram } from "@/store/useDiagram";
 
@@ -75,6 +76,7 @@ export default function Page() {
         {hydrated && <SummaryPanel />}
         {hydrated && <Legend />}
         {hydrated && size.width > 0 && <BackgroundPanel />}
+        {hydrated && size.width > 0 && <ChatWidget canvasSize={size} />}
 
         {/* Empty-state hint */}
         {hydrated && <EmptyHint onUploadClick={() => setShowUpload(true)} />}

@@ -28,7 +28,7 @@ export default function Legend() {
     return (
       <button
         onClick={() => setCollapsed(false)}
-        className="absolute bottom-3 left-3 cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/90 px-3 py-1.5 text-xs text-[var(--color-fg)] shadow-lg backdrop-blur transition-colors duration-150 hover:bg-[var(--color-surface)]"
+        className="absolute bottom-[4.5rem] left-3 cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/90 px-3 py-1.5 text-xs text-[var(--color-fg)] shadow-lg backdrop-blur transition-colors duration-150 hover:bg-[var(--color-surface)]"
       >
         Show legend
       </button>
@@ -36,7 +36,7 @@ export default function Legend() {
   }
 
   return (
-    <div className="absolute bottom-3 left-3 w-52 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/90 p-3 shadow-xl backdrop-blur">
+    <div className="absolute bottom-[4.5rem] left-3 w-52 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/90 p-3 shadow-xl backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-fg)]">
           Legend

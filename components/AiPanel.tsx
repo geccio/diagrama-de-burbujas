@@ -13,14 +13,13 @@ import {
   aiGenerateProgram,
   aiSuggestAdjacencies,
   aiEditBubbles,
-  aiChatTurn,
   aiCritique,
   aiReadPlanImage,
   normalizeCategory,
   type AiCritiqueItem,
 } from "@/lib/aiTasks";
 import { readImageFile } from "@/lib/readImage";
-import { IconX, IconWarning, IconSparkles } from "@/components/icons";
+import { IconX, IconWarning } from "@/components/icons";
 import OllamaSetupHelp from "@/components/OllamaSetupHelp";
 
 interface Props {
@@ -39,7 +38,6 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
   const addSpaces = useDiagram((s) => s.addSpaces);
   const addLinksByNames = useDiagram((s) => s.addLinksByNames);
   const applyAiEdits = useDiagram((s) => s.applyAiEdits);
-  const applyChatActions = useDiagram((s) => s.applyChatActions);
 
   const [settings, setSettings] = useState<OllamaSettings>(loadOllamaSettings());
   const [models, setModels] = useState<string[]>([]);
@@ -47,11 +45,6 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
   const [editInstruction, setEditInstruction] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-  // free-form chat
-  const [chat, setChat] = useState<
-    { role: "user" | "assistant"; content: string }[]
-  >([]);
-  const [chatInput, setChatInput] = useState("");
   // critique
   const [findings, setFindings] = useState<AiCritiqueItem[] | null>(null);
   // vision
@@ -179,36 +172,6 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
       category: b.category,
       floor: b.floor,
     }));
-  }
-
-  async function handleChatSend() {
-    const msg = chatInput.trim();
-    if (!msg) return;
-    setChatInput("");
-    const history = chat.slice(-8); // keep recent context
-    setChat((c) => [...c, { role: "user", content: msg }]);
-    setStatus({ kind: "busy", msg: "Thinking…" });
-    try {
-      const res = await aiChatTurn(settings, history, snapshot(), msg);
-      const actions = res.actions.map((a) => ({
-        ...a,
-        category: a.category ? normalizeCategory(a.category) : undefined,
-      }));
-      const changed = applyChatActions(actions, canvasSize);
-      const note =
-        changed > 0 ? ` (applied ${changed} change${changed > 1 ? "s" : ""})` : "";
-      setChat((c) => [
-        ...c,
-        { role: "assistant", content: (res.reply || "Done.") + note },
-      ]);
-      setStatus({ kind: "idle" });
-    } catch (e) {
-      setChat((c) => [
-        ...c,
-        { role: "assistant", content: "⚠ " + describeOllamaError(e) },
-      ]);
-      setStatus({ kind: "idle" });
-    }
   }
 
   async function handleCritique() {
@@ -487,53 +450,10 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
           )}
         </div>
 
-        {/* Free-form chat */}
-        <div className="mb-4 rounded-xl border border-[var(--color-border)] p-3">
-          <h3 className="mb-1 text-sm font-medium">Chat</h3>
-          <p className="mb-2 text-xs text-[var(--color-muted-fg)]">
-            Ask or instruct in plain language — it can create and edit across
-            messages. e.g. &quot;add 3 phone booths on P2 and connect them to the
-            lounge&quot;.
-          </p>
-          {chat.length > 0 && (
-            <div className="mb-2 max-h-40 space-y-2 overflow-y-auto rounded-lg bg-[var(--color-surface-2)] p-2">
-              {chat.map((m, i) => (
-                <div
-                  key={i}
-                  className={`text-xs ${
-                    m.role === "user"
-                      ? "text-[var(--color-fg)]"
-                      : "text-[var(--color-muted-fg)]"
-                  }`}
-                >
-                  <span className="font-semibold">
-                    {m.role === "user" ? "You" : "AI"}:
-                  </span>{" "}
-                  {m.content}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-2">
-            <input
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !busy) handleChatSend();
-              }}
-              placeholder="Type a message…"
-              className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] focus:border-[var(--color-ring)]"
-            />
-            <button
-              onClick={handleChatSend}
-              disabled={busy || !chatInput.trim()}
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-[var(--color-on-primary)] transition-colors duration-150 hover:bg-[var(--color-primary-hover)] disabled:opacity-50"
-            >
-              <IconSparkles size={16} />
-              Send
-            </button>
-          </div>
-        </div>
+        <p className="mb-3 text-xs text-[var(--color-muted-fg)]">
+          💬 For free-form chat that creates &amp; edits as you go, use the chat
+          bubble in the bottom-left corner of the canvas.
+        </p>
 
         {/* Status */}
         {status.kind !== "idle" && (

@@ -42,6 +42,33 @@ export default function Page() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
+  // Clipboard shortcuts: Ctrl/Cmd + C (copy), V (paste), D (duplicate).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      ) {
+        return; // don't hijack real text copy/paste
+      }
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const k = e.key.toLowerCase();
+      const store = useDiagram.getState();
+      if (k === "c") {
+        if (store.copySelection() > 0) e.preventDefault();
+      } else if (k === "v") {
+        if (store.pasteClipboard() > 0) e.preventDefault();
+      } else if (k === "d") {
+        if (store.duplicateSelection() > 0) e.preventDefault();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Track the canvas container size responsively.
   useEffect(() => {
     function measure() {

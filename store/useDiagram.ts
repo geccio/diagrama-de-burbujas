@@ -151,6 +151,12 @@ interface DiagramState extends UIState {
   pushHistory: () => void;
   undo: () => void;
   redo: () => void;
+
+  // clipboard: copy / paste / duplicate bubbles (+ links between them)
+  copySelection: () => number;
+  pasteClipboard: () => number;
+  duplicateSelection: () => number;
+  hasClipboard: () => boolean;
 }
 
 /** Persist the diagram to localStorage (debounced). */
@@ -168,6 +174,13 @@ function persist(diagram: Diagram, set: (p: Partial<DiagramState>) => void) {
 const MAX_HISTORY = 60;
 let undoStack: Diagram[] = [];
 let redoStack: Diagram[] = [];
+
+// --- Clipboard (module-level; copied bubbles + links between them) ---
+interface Clipboard {
+  bubbles: Bubble[];
+  links: Link[];
+}
+let clipboard: Clipboard | null = null;
 
 function clone(d: Diagram): Diagram {
   return JSON.parse(JSON.stringify(d));
@@ -1009,5 +1022,71 @@ export const useDiagram = create<DiagramState>((set, get) => ({
       canRedo: redoStack.length > 0,
     });
     persist(next, set);
+  },
+
+  // --- clipboard ---
+  hasClipboard: () => clipboard !== null && clipboard.bubbles.length > 0,
+
+  copySelection: () => {
+    const { selectedBubbleId, selectedBubbleIds } = get();
+    const layer = get().activeLayer();
+    const ids = new Set(
+      selectedBubbleIds.length > 0
+        ? selectedBubbleIds
+        : selectedBubbleId
+        ? [selectedBubbleId]
+        : []
+    );
+    if (ids.size === 0) return 0;
+    const bubbles = layer.bubbles.filter((b) => ids.has(b.id));
+    // Keep only links whose BOTH ends are in the copied set.
+    const links = layer.links.filter(
+      (k) => ids.has(k.fromBubbleId) && ids.has(k.toBubbleId)
+    );
+    // Deep-copy so later edits to the originals don't mutate the clipboard.
+    clipboard = JSON.parse(JSON.stringify({ bubbles, links })) as Clipboard;
+    return bubbles.length;
+  },
+
+  duplicateSelection: () => {
+    get().copySelection();
+    return get().pasteClipboard();
+  },
+
+  pasteClipboard: () => {
+    if (!clipboard || clipboard.bubbles.length === 0) return 0;
+    const { diagram } = get();
+    const OFFSET = 40;
+    // Fresh ids; remap so internal links reconnect to the new bubbles.
+    const idMap = new Map<string, string>();
+    const newBubbles: Bubble[] = clipboard.bubbles.map((b) => {
+      const nid = uid("bubble");
+      idMap.set(b.id, nid);
+      return { ...b, id: nid, x: b.x + OFFSET, y: b.y + OFFSET };
+    });
+    const newLinks: Link[] = clipboard.links.map((k) => ({
+      ...k,
+      id: uid("link"),
+      fromBubbleId: idMap.get(k.fromBubbleId)!,
+      toBubbleId: idMap.get(k.toBubbleId)!,
+    }));
+    const layers = diagram.layers.map((l) =>
+      l.id === diagram.activeLayerId
+        ? {
+            ...l,
+            bubbles: [...l.bubbles, ...newBubbles],
+            links: [...l.links, ...newLinks],
+          }
+        : l
+    );
+    const next: Diagram = { ...diagram, layers };
+    set({
+      diagram: next,
+      selectedBubbleId: newBubbles.length === 1 ? newBubbles[0].id : null,
+      selectedBubbleIds: newBubbles.length > 1 ? newBubbles.map((b) => b.id) : [],
+      selectedLinkId: null,
+    });
+    commit(diagram, next, set);
+    return newBubbles.length;
   },
 }));

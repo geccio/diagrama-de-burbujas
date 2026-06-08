@@ -2,7 +2,7 @@
 
 import { useDiagram } from "@/store/useDiagram";
 import { CATEGORIES, CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
-import { IconTrash, IconX } from "@/components/icons";
+import { IconTrash, IconX, IconCopy } from "@/components/icons";
 
 const COLORS = [
   "#60a5fa",
@@ -24,6 +24,7 @@ export default function MultiSelectBar() {
   const bulkSetCategory = useDiagram((s) => s.bulkSetCategory);
   const bulkSetColor = useDiagram((s) => s.bulkSetColor);
   const bulkDelete = useDiagram((s) => s.bulkDelete);
+  const duplicateSelection = useDiagram((s) => s.duplicateSelection);
   const setMultiSelection = useDiagram((s) => s.setMultiSelection);
 
   if (selectedBubbleIds.length < 2) return null;
@@ -69,6 +70,15 @@ export default function MultiSelectBar() {
       </div>
 
       <div className="h-5 w-px bg-[var(--color-border)]" />
+
+      <button
+        onClick={() => duplicateSelection()}
+        title="Duplicate (Ctrl+D)"
+        className="flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-sm text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface-2)]"
+      >
+        <IconCopy size={14} />
+        Duplicate
+      </button>
 
       <button
         onClick={bulkDelete}

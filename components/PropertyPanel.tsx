@@ -1,7 +1,7 @@
 "use client";
 
 import { useDiagram } from "@/store/useDiagram";
-import { IconTrash } from "@/components/icons";
+import { IconTrash, IconCopy } from "@/components/icons";
 import { CATEGORIES, CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
 import { radiusForValue } from "@/lib/bubbleLayout";
 
@@ -34,6 +34,7 @@ export default function PropertyPanel() {
   const setLinkKind = useDiagram((s) => s.setLinkKind);
   const deleteBubble = useDiagram((s) => s.deleteBubble);
   const deleteLink = useDiagram((s) => s.deleteLink);
+  const duplicateSelection = useDiagram((s) => s.duplicateSelection);
 
   const bubble = layer.bubbles.find((b) => b.id === selectedBubbleId);
   const link = layer.links.find((k) => k.id === selectedLinkId);
@@ -208,6 +209,15 @@ export default function PropertyPanel() {
           ))}
         </div>
       </div>
+
+      <button
+        onClick={() => duplicateSelection()}
+        title="Duplicate (Ctrl+D)"
+        className="mb-2 flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-sm font-medium text-[var(--color-fg)] transition-colors duration-150 hover:bg-[var(--color-surface)]"
+      >
+        <IconCopy size={16} />
+        Duplicate
+      </button>
 
       <button onClick={() => deleteBubble(bubble.id)} className={dangerBtn}>
         <IconTrash size={16} />

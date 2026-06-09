@@ -196,6 +196,7 @@ function commit(
   next: Diagram,
   set: (p: Partial<DiagramState>) => void
 ) {
+  coalesceTag = null;
   undoStack.push(clone(prev));
   if (undoStack.length > MAX_HISTORY) undoStack.shift();
   redoStack = [];
@@ -203,9 +204,33 @@ function commit(
   persist(next, set);
 }
 
+// Coalesce rapid same-tag commits (typing in a field, dragging a slider) into
+// a single undo entry: only the first change of a burst pushes history.
+const COALESCE_MS = 1000;
+let coalesceTag: string | null = null;
+let coalesceUntil = 0;
+
+function commitCoalesced(
+  tag: string,
+  prev: Diagram,
+  next: Diagram,
+  set: (p: Partial<DiagramState>) => void
+) {
+  const now = Date.now();
+  if (tag === coalesceTag && now < coalesceUntil) {
+    coalesceUntil = now + COALESCE_MS;
+    persist(next, set);
+    return;
+  }
+  commit(prev, next, set);
+  coalesceTag = tag;
+  coalesceUntil = now + COALESCE_MS;
+}
+
 function resetHistory(set: (p: Partial<DiagramState>) => void) {
   undoStack = [];
   redoStack = [];
+  coalesceTag = null;
   set({ canUndo: false, canRedo: false });
 }
 
@@ -415,7 +440,9 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     const { diagram } = get();
     const next: Diagram = { ...diagram, pixelsPerMeter: Math.max(1, ppm) };
     set({ diagram: next });
-    persist(next, set);
+    // Undoable (so undo doesn't silently lose a calibration), but coalesced
+    // so typing in the scale field doesn't flood the history.
+    commitCoalesced("ppm", diagram, next, set);
   },
 
   startCalibration: () =>
@@ -776,7 +803,13 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     );
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    commit(diagram, next, set);
+    // Coalesce per-keystroke / per-slider-tick updates into one undo entry.
+    commitCoalesced(
+      `bubble:${id}:${Object.keys(patch).sort().join(",")}`,
+      diagram,
+      next,
+      set
+    );
   },
 
   setBubbleCategory: (id, category) => {
@@ -961,7 +994,8 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     });
     const next: Diagram = { ...diagram, layers };
     set({ diagram: next });
-    persist(next, set); // opacity/move are fine-grained; keep out of history flood
+    // Undoable, but coalesced: an opacity-slider drag is one history entry.
+    commitCoalesced("background", diagram, next, set);
   },
 
   removeBackground: () => {
@@ -1002,6 +1036,7 @@ export const useDiagram = create<DiagramState>((set, get) => ({
   // --- undo / redo + drag history ---
   pushHistory: () => {
     const { diagram } = get();
+    coalesceTag = null;
     undoStack.push(clone(diagram));
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
     redoStack = [];
@@ -1012,11 +1047,13 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     const prev = undoStack.pop();
     if (!prev) return;
     const { diagram } = get();
+    coalesceTag = null;
     redoStack.push(clone(diagram));
     set({
       diagram: prev,
       selectedBubbleId: null,
       selectedLinkId: null,
+      selectedBubbleIds: [],
       pendingConnectId: null,
       canUndo: undoStack.length > 0,
       canRedo: true,
@@ -1028,11 +1065,13 @@ export const useDiagram = create<DiagramState>((set, get) => ({
     const next = redoStack.pop();
     if (!next) return;
     const { diagram } = get();
+    coalesceTag = null;
     undoStack.push(clone(diagram));
     set({
       diagram: next,
       selectedBubbleId: null,
       selectedLinkId: null,
+      selectedBubbleIds: [],
       pendingConnectId: null,
       canUndo: true,
       canRedo: redoStack.length > 0,
@@ -1065,8 +1104,14 @@ export const useDiagram = create<DiagramState>((set, get) => ({
   },
 
   duplicateSelection: () => {
-    get().copySelection();
-    return get().pasteClipboard();
+    // Duplicate via a temporary copy WITHOUT touching the user's clipboard:
+    // no selection = no-op (never paste stale content), and a later Ctrl+V
+    // still pastes what the user explicitly copied.
+    const saved = clipboard;
+    if (get().copySelection() === 0) return 0;
+    const count = get().pasteClipboard();
+    clipboard = saved;
+    return count;
   },
 
   pasteClipboard: () => {

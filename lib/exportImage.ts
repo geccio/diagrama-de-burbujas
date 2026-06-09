@@ -39,8 +39,13 @@ async function buildSheet(stage: Konva.Stage, meta: SheetMeta) {
   const W = stage.width();
   const H = stage.height();
   const headerH = 70;
-  // Tall enough to fit category + floor totals side by side (up to ~6 rows each).
-  const footerH = meta.floors.length > 0 ? 190 : 150;
+  // Grow the footer so EVERY category and floor row fits (no silent truncation):
+  // rows start 40px below the footer top and need 24px each, plus 8px padding.
+  const totalRows = Math.max(meta.categories.length, meta.floors.length);
+  const footerH = Math.max(
+    meta.floors.length > 0 ? 190 : 150,
+    totalRows * 24 + 48
+  );
   const sheetW = W;
   const sheetH = headerH + H + footerH;
 
@@ -151,7 +156,20 @@ function drawFooter(
     ctx.fill();
     ctx.fillStyle = t.fg;
     ctx.font = "13px ui-sans-serif, system-ui, sans-serif";
-    ctx.fillText(label, x + 20, y);
+    // Truncate long labels so they never run into the right-aligned value.
+    ctx.save();
+    ctx.font = "13px ui-monospace, monospace";
+    const valueW = ctx.measureText(value).width;
+    ctx.restore();
+    const maxLabelW = colW - 24 - 20 - valueW - 8;
+    let shown = label;
+    if (ctx.measureText(shown).width > maxLabelW) {
+      while (shown.length > 1 && ctx.measureText(shown + "…").width > maxLabelW) {
+        shown = shown.slice(0, -1);
+      }
+      shown += "…";
+    }
+    ctx.fillText(shown, x + 20, y);
     ctx.textAlign = "right";
     ctx.fillStyle = t.muted;
     ctx.font = "13px ui-monospace, monospace";
@@ -179,14 +197,18 @@ function drawFooter(
 
   // Column 2: floor totals (mirrors the Totals panel's "By Floor" view).
   if (meta.floors.length > 0) {
-    const fx = pad + colW;
+    let fx = pad + colW;
     let fy = rowsTop;
     ctx.textAlign = "left";
     ctx.fillStyle = t.muted;
     ctx.font = "bold 11px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText("FLOOR TOTALS", fx, footerY + 16);
     for (const f of meta.floors) {
-      if (fy + rowH > rowsBottom) break;
+      // The footer is sized so all rows fit; wrap to a new column as a safety net.
+      if (fy + rowH > rowsBottom) {
+        fx += colW;
+        fy = rowsTop;
+      }
       drawRow(fx, fy, f.color, f.name, `${formatArea(f.area)} m² · ${f.count}`);
       fy += rowH;
     }

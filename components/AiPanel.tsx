@@ -54,6 +54,28 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
     saveOllamaSettings(settings);
   }, [settings]);
 
+  // Guard against applying an AI result to the wrong place: the request keeps
+  // running while the user may close this modal or switch layers.
+  const closedRef = useRef(false);
+  useEffect(
+    () => () => {
+      closedRef.current = true;
+    },
+    []
+  );
+
+  function safeToApply(requestLayerId: string): boolean {
+    if (closedRef.current) return false; // modal closed mid-request
+    if (useDiagram.getState().diagram.activeLayerId !== requestLayerId) {
+      setStatus({
+        kind: "error",
+        msg: "You switched layers while the AI was working — nothing was changed. Switch back and try again.",
+      });
+      return false;
+    }
+    return true;
+  }
+
   async function testConnection() {
     setStatus({ kind: "busy", msg: "Connecting to Ollama…" });
     try {
@@ -73,12 +95,14 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
   async function handleGenerate() {
     if (!brief.trim()) return;
     setStatus({ kind: "busy", msg: "Generating program…" });
+    const requestLayerId = useDiagram.getState().diagram.activeLayerId;
     try {
       const spaces = await aiGenerateProgram(settings, brief.trim());
       if (spaces.length === 0) {
         setStatus({ kind: "error", msg: "The model returned no spaces." });
         return;
       }
+      if (!safeToApply(requestLayerId)) return;
       addSpaces(
         spaces.map((s) => ({
           name: s.name,
@@ -105,8 +129,10 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
       return;
     }
     setStatus({ kind: "busy", msg: "Suggesting adjacencies…" });
+    const requestLayerId = useDiagram.getState().diagram.activeLayerId;
     try {
       const adj = await aiSuggestAdjacencies(settings, names);
+      if (!safeToApply(requestLayerId)) return;
       addLinksByNames(adj);
       setStatus({
         kind: "ok",
@@ -124,6 +150,7 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
       return;
     }
     setStatus({ kind: "busy", msg: "Applying edits…" });
+    const requestLayerId = useDiagram.getState().diagram.activeLayerId;
     try {
       const snapshot = layer.bubbles.map((b) => ({
         id: b.id,
@@ -137,6 +164,7 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
         snapshot,
         editInstruction.trim()
       );
+      if (!safeToApply(requestLayerId)) return;
       const changed = applyAiEdits(
         edits.map((e) => ({
           id: e.id,
@@ -204,6 +232,7 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
 
   async function handlePlanImage(file: File) {
     setStatus({ kind: "busy", msg: "Reading the plan image (vision)…" });
+    const requestLayerId = useDiagram.getState().diagram.activeLayerId;
     try {
       const { src } = await readImageFile(file);
       const b64 = src.split(",")[1] ?? "";
@@ -215,6 +244,7 @@ export default function AiPanel({ onClose, canvasSize }: Props) {
         });
         return;
       }
+      if (!safeToApply(requestLayerId)) return;
       addSpaces(
         spaces.map((s) => ({
           name: s.name,

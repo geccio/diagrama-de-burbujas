@@ -50,6 +50,9 @@ export default function ChatWidget({ canvasSize }: Props) {
     const history = chat.slice(-8);
     setChat((c) => [...c, { role: "user", content: msg }]);
     setBusy(true);
+    // Remember which layer the request was about — if the user switches tabs
+    // while the AI is thinking, don't apply the changes to the wrong layer.
+    const requestLayerId = useDiagram.getState().diagram.activeLayerId;
     try {
       const res = await aiChatTurn(
         loadOllamaSettings(),
@@ -61,6 +64,20 @@ export default function ChatWidget({ canvasSize }: Props) {
         ...a,
         category: a.category ? normalizeCategory(a.category) : undefined,
       }));
+      if (
+        actions.length > 0 &&
+        useDiagram.getState().diagram.activeLayerId !== requestLayerId
+      ) {
+        setChat((c) => [
+          ...c,
+          {
+            role: "assistant",
+            content:
+              "⚠ You switched to another layer while I was thinking, so I didn't apply the changes. Switch back and resend to apply them.",
+          },
+        ]);
+        return;
+      }
       const changed = applyChatActions(actions, canvasSize);
       const note =
         changed > 0

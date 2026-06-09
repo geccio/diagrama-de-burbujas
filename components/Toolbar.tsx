@@ -10,8 +10,8 @@ import {
   type SheetMeta,
 } from "@/lib/exportImage";
 import { exportProject, importProject } from "@/lib/projectFile";
-import { CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
-import { floorTotals } from "@/lib/floorTotals";
+import { CATEGORIES, CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
+import { floorTotals, NO_FLOOR_LABEL } from "@/lib/floorTotals";
 import {
   IconBubbles,
   IconCursor,
@@ -110,6 +110,14 @@ export default function Toolbar({
     return Array.from(set);
   }, [layer.bubbles]);
 
+  // If the filtered floor no longer exists (bubbles deleted/re-floored), reset
+  // the filter — otherwise everything stays dimmed with no dropdown to fix it.
+  useEffect(() => {
+    if (floorFilter !== "__all__" && !floors.includes(floorFilter)) {
+      setFloorFilter("__all__");
+    }
+  }, [floors, floorFilter, setFloorFilter]);
+
   // Keyboard shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -142,7 +150,10 @@ export default function Toolbar({
     const byCat = new Map<CategoryId, { area: number; count: number }>();
     let totalArea = 0;
     for (const b of layer.bubbles) {
-      const cat = (b.category ?? "other") as CategoryId;
+      // Bin unknown categories (e.g. from an older/foreign .json) into "other"
+      // so every bubble shows up in the totals.
+      const raw = b.category ?? "other";
+      const cat: CategoryId = raw in CATEGORIES ? (raw as CategoryId) : "other";
       if (!byCat.has(cat)) byCat.set(cat, { area: 0, count: 0 });
       const e = byCat.get(cat)!;
       e.count += 1;
@@ -151,6 +162,10 @@ export default function Toolbar({
         totalArea += b.value;
       }
     }
+    // Only print the floors column when at least one real floor is assigned —
+    // a lone "(no floor)" row is just noise.
+    const allFloors = floorTotals(layer.bubbles);
+    const hasRealFloor = allFloors.some((f) => f.name !== NO_FLOOR_LABEL);
     return {
       title: "Bubble Diagram",
       date: new Date().toLocaleDateString(),
@@ -162,17 +177,36 @@ export default function Toolbar({
         id: c,
         ...byCat.get(c)!,
       })),
-      floors: floorTotals(layer.bubbles),
+      floors: hasRealFloor ? allFloors : [],
       hasConnections: layer.links.length > 0,
     };
   }
 
-  function handleExport(kind: "png" | "pdf") {
+  async function handleExport(kind: "png" | "pdf") {
     const stage = stageRef.current;
     if (!stage) return;
+    // Clear any selection so highlight rings / red link strokes aren't baked
+    // into the exported image, then restore it afterwards.
+    const st = useDiagram.getState();
+    const sel = {
+      bubble: st.selectedBubbleId,
+      link: st.selectedLinkId,
+      multi: st.selectedBubbleIds,
+    };
+    const hadSelection = sel.bubble || sel.link || sel.multi.length > 0;
+    if (hadSelection) {
+      st.selectBubble(null);
+      await new Promise((r) => setTimeout(r, 60)); // let Konva redraw
+    }
     const meta = buildSheetMeta();
-    if (kind === "png") exportSheetPng(stage, meta);
-    else exportSheetPdf(stage, meta);
+    try {
+      if (kind === "png") await exportSheetPng(stage, meta);
+      else await exportSheetPdf(stage, meta);
+    } finally {
+      if (sel.bubble) st.selectBubble(sel.bubble);
+      else if (sel.link) st.selectLink(sel.link);
+      else if (sel.multi.length > 0) st.setMultiSelection(sel.multi);
+    }
   }
 
   function handleSaveProject() {

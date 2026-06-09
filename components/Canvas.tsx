@@ -143,7 +143,11 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   function finishDraft() {
     if (draft && draft.points.length >= 4) {
       const lengthMeters = polylineLengthMeters(draft.points, ppm);
-      addDrawing({ id: uid("draw"), points: draft.points, lengthMeters });
+      // A single click leaves a duplicated point — don't commit an invisible
+      // zero-length measurement to the layer (and the undo history).
+      if (lengthMeters > 0.001) {
+        addDrawing({ id: uid("draw"), points: draft.points, lengthMeters });
+      }
     }
     setDraft(null);
     setCursor(null);
@@ -154,7 +158,10 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
   function handleStageClick(
     e: Konva.KonvaEventObject<MouseEvent | TouchEvent>
   ) {
-    const clickedEmpty = e.target === e.target.getStage();
+    // The floor-plan image counts as "empty" too, so clicking it deselects.
+    const clickedEmpty =
+      e.target === e.target.getStage() ||
+      e.target.name() === "background-image";
 
     if (calibrating) {
       const w = getWorldPointer();
@@ -183,13 +190,14 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
     }
   }
 
-  // Box-selection: Shift+drag on empty canvas in select mode.
+  // Box-selection: Shift+drag on empty canvas (or the floor plan) in select mode.
   function handleMouseDown(e: Konva.KonvaEventObject<MouseEvent>) {
     if (
       mode === "select" &&
       !calibrating &&
       e.evt.shiftKey &&
-      e.target === e.target.getStage()
+      (e.target === e.target.getStage() ||
+        e.target.name() === "background-image")
     ) {
       const w = getWorldPointer();
       if (!w) return;
@@ -204,9 +212,16 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
       const maxX = Math.max(selBox.x1, selBox.x2);
       const minY = Math.min(selBox.y1, selBox.y2);
       const maxY = Math.max(selBox.y1, selBox.y2);
+      // Only select bubbles that are actually visible (floor filter respected),
+      // so bulk actions can't silently hit hidden bubbles.
       const ids = layer.bubbles
         .filter(
-          (b) => b.x >= minX && b.x <= maxX && b.y >= minY && b.y <= maxY
+          (b) =>
+            onActiveFloor(b.floor) &&
+            b.x >= minX &&
+            b.x <= maxX &&
+            b.y >= minY &&
+            b.y <= maxY
         )
         .map((b) => b.id);
       setMultiSelection(ids);
@@ -245,11 +260,13 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
     if (!calibrating) setCalPts([]);
   }, [calibrating]);
 
-  // Zoom-to-fit when requested: frame all bubbles (+ drawings) in view.
+  // Zoom-to-fit when requested: frame bubbles, drawings, and the floor plan.
   useEffect(() => {
     if (fitRequest === 0) return;
     const items = layer.bubbles;
-    if (items.length === 0) return;
+    if (items.length === 0 && layer.drawings.length === 0 && !background) {
+      return;
+    }
     let minX = Infinity,
       minY = Infinity,
       maxX = -Infinity,
@@ -259,6 +276,12 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
       minY = Math.min(minY, b.y - b.radius);
       maxX = Math.max(maxX, b.x + b.radius);
       maxY = Math.max(maxY, b.y + b.radius);
+    }
+    if (background) {
+      minX = Math.min(minX, background.x);
+      minY = Math.min(minY, background.y);
+      maxX = Math.max(maxX, background.x + background.width);
+      maxY = Math.max(maxY, background.y + background.height);
     }
     for (const d of layer.drawings) {
       for (let i = 0; i < d.points.length; i += 2) {
@@ -383,7 +406,6 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
             bg={background}
             draggable={mode === "select" && !background.locked}
             onChange={(patch) => updateBackground(patch)}
-            onDragStart={pushHistory}
           />
         </KonvaLayer>
       )}
@@ -405,7 +427,9 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
               strokeWidth={selected ? 4 : 2.5}
               dash={dashed ? [9, 7] : undefined}
               opacity={dimmed ? 0.1 : 1}
-              listening={!dimmed}
+              // Don't capture clicks while measuring/calibrating, so points
+              // can be placed on top of a line.
+              listening={!dimmed && mode !== "draw" && !calibrating}
               hitStrokeWidth={18}
               onClick={(e) => {
                 e.cancelBubble = true;
@@ -445,7 +469,9 @@ const Canvas = forwardRef<Konva.Stage, Props>(function Canvas(
               x={b.x}
               y={b.y}
               opacity={dimmed ? 0.12 : 1}
-              listening={!dimmed}
+              // Don't capture clicks while measuring/calibrating, so points
+              // can be placed on top of a bubble (clicks pass to the stage).
+              listening={!dimmed && mode !== "draw" && !calibrating}
               draggable={mode === "select" && !dimmed}
               onDragStart={() => {
                 pushHistory();
@@ -752,12 +778,10 @@ function BackgroundImage({
   bg,
   draggable,
   onChange,
-  onDragStart,
 }: {
   bg: Background;
   draggable: boolean;
   onChange: (patch: Partial<Background>) => void;
-  onDragStart: () => void;
 }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null);
 
@@ -774,6 +798,7 @@ function BackgroundImage({
 
   return (
     <KonvaImage
+      name="background-image"
       image={img}
       x={bg.x}
       y={bg.y}
@@ -781,8 +806,15 @@ function BackgroundImage({
       height={bg.height}
       opacity={bg.opacity}
       draggable={draggable}
-      onDragStart={() => draggable && onDragStart()}
-      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
+      // Shift+drag is box-selection — don't move the plan underneath it.
+      onDragStart={(e) => {
+        if (e.evt?.shiftKey) e.target.stopDrag();
+      }}
+      onDragEnd={(e) => {
+        if (e.target.x() !== bg.x || e.target.y() !== bg.y) {
+          onChange({ x: e.target.x(), y: e.target.y() });
+        }
+      }}
       // Subtle cursor hint when movable.
       onMouseEnter={(e) => {
         if (draggable) {

@@ -18,8 +18,9 @@ const COLORS = [
   "#c084fc",
 ];
 
+// Positioned by the right-side panel column in page.tsx.
 const cardClass =
-  "absolute right-3 top-3 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-2xl";
+  "pointer-events-auto w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-2xl";
 const inputClass =
   "w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2 py-1.5 text-sm text-[var(--color-fg)] transition-colors duration-150 focus:border-[var(--color-ring)]";
 const dangerBtn =

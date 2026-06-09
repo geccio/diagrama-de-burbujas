@@ -58,6 +58,9 @@ export default function Page() {
       const k = e.key.toLowerCase();
       const store = useDiagram.getState();
       if (k === "c") {
+        // If the user highlighted page text (e.g. an AI chat reply), let the
+        // browser copy that text instead of hijacking it for bubbles.
+        if (window.getSelection()?.toString()) return;
         if (store.copySelection() > 0) e.preventDefault();
       } else if (k === "v") {
         if (store.pasteClipboard() > 0) e.preventDefault();
@@ -98,9 +101,15 @@ export default function Page() {
         {hydrated && size.width > 0 && (
           <Canvas ref={stageRef} width={size.width} height={size.height} />
         )}
-        {hydrated && <PropertyPanel />}
+        {/* Right-side panel column: property panel stacks above the totals
+            panel so they can never overlap. */}
+        {hydrated && (
+          <div className="pointer-events-none absolute right-3 top-3 bottom-3 z-20 flex flex-col items-end gap-3 overflow-y-auto">
+            <PropertyPanel />
+            <SummaryPanel />
+          </div>
+        )}
         {hydrated && <MultiSelectBar />}
-        {hydrated && <SummaryPanel />}
         {hydrated && <Legend />}
         {hydrated && size.width > 0 && <BackgroundPanel />}
         {hydrated && size.width > 0 && <ChatWidget canvasSize={size} />}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useDiagram } from "@/store/useDiagram";
 import { CATEGORIES, CATEGORY_ORDER, type CategoryId } from "@/lib/categories";
-import { floorTotals } from "@/lib/floorTotals";
+import { floorTotals, NO_FLOOR_LABEL } from "@/lib/floorTotals";
 import { IconX } from "@/components/icons";
 
 /**
@@ -14,8 +14,6 @@ type Row = { key: string; label: string; color: string; area: number };
 
 export default function SummaryPanel() {
   const layer = useDiagram((s) => s.activeLayer());
-  const selectedBubbleId = useDiagram((s) => s.selectedBubbleId);
-  const selectedLinkId = useDiagram((s) => s.selectedLinkId);
   const [open, setOpen] = useState(true);
   const [view, setView] = useState<"category" | "floor">("category");
 
@@ -24,7 +22,10 @@ export default function SummaryPanel() {
     let withArea = 0;
     const byCat = new Map<CategoryId, { area: number; count: number }>();
     for (const b of layer.bubbles) {
-      const cat = (b.category ?? "other") as CategoryId;
+      // Bin unknown categories (e.g. from an older/foreign .json) into "other"
+      // so no bubble silently disappears from the breakdown.
+      const raw = b.category ?? "other";
+      const cat: CategoryId = raw in CATEGORIES ? (raw as CategoryId) : "other";
       if (!byCat.has(cat)) byCat.set(cat, { area: 0, count: 0 });
       const entry = byCat.get(cat)!;
       entry.count += 1;
@@ -42,12 +43,17 @@ export default function SummaryPanel() {
       area: byCat.get(c)!.area,
     }));
 
-    const floors: Row[] = floorTotals(layer.bubbles).map((f) => ({
-      key: f.name,
-      label: f.name,
-      color: f.color,
-      area: f.area,
-    }));
+    // Only show the floor breakdown when at least one real floor is assigned;
+    // a lone "(no floor)" row carries no information.
+    const allFloors = floorTotals(layer.bubbles);
+    const floors: Row[] = allFloors.some((f) => f.name !== NO_FLOOR_LABEL)
+      ? allFloors.map((f) => ({
+          key: f.name,
+          label: f.name,
+          color: f.color,
+          area: f.area,
+        }))
+      : [];
 
     return { total, withArea, cats, floors, count: layer.bubbles.length };
   }, [layer.bubbles]);
@@ -56,16 +62,13 @@ export default function SummaryPanel() {
 
   if (layer.bubbles.length === 0) return null;
 
-  // Avoid overlapping the property panel (which sits top-right when selecting).
-  const pushedDown = selectedBubbleId || selectedLinkId;
-
+  // Positioned by the right-side panel column in page.tsx (below the property
+  // panel when something is selected), so the two never overlap.
   if (!open) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className={`absolute right-3 ${
-          pushedDown ? "top-[19rem]" : "top-3"
-        } cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/90 px-3 py-1.5 text-xs text-[var(--color-fg)] shadow-lg backdrop-blur transition-colors duration-150 hover:bg-[var(--color-surface)]`}
+        className="pointer-events-auto cursor-pointer rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/90 px-3 py-1.5 text-xs text-[var(--color-fg)] shadow-lg backdrop-blur transition-colors duration-150 hover:bg-[var(--color-surface)]"
       >
         Show totals
       </button>
@@ -73,11 +76,7 @@ export default function SummaryPanel() {
   }
 
   return (
-    <div
-      className={`absolute right-3 ${
-        pushedDown ? "top-[19rem]" : "top-3"
-      } w-60 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 p-3 shadow-xl backdrop-blur`}
-    >
+    <div className="pointer-events-auto w-60 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 p-3 shadow-xl backdrop-blur">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted-fg)]">
           Totals · {layer.name}
@@ -124,7 +123,9 @@ export default function SummaryPanel() {
 
       {rows.length === 0 ? (
         <p className="text-xs text-[var(--color-muted-fg)]">
-          No floors assigned yet.
+          {view === "floor"
+            ? "No floors assigned yet."
+            : "No categories assigned yet."}
         </p>
       ) : (
         <ul className="space-y-2">
